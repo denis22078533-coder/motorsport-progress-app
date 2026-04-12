@@ -1,15 +1,5 @@
 import Icon from "@/components/ui/icon";
-
-const USER = {
-  name: "Алексей Громов",
-  username: "@aleksey_moto",
-  bio: "🏍️ MotoGP фанат с 2006 года · Был на 12 Гран-При · Москва",
-  avatar: "🏁",
-  posts: 84,
-  followers: 1240,
-  following: 318,
-  verified: true,
-};
+import { useAuth } from "@/context/AuthContext";
 
 const ACHIEVEMENTS = [
   { icon: "🏆", label: "Эксперт MotoGP", desc: "1000+ реакций" },
@@ -27,9 +17,20 @@ const POSTS_PREVIEW = [
   "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/ed071a00-b7e4-4512-8c06-68a6062dd2bd.jpg",
 ];
 
-const FAVORITES = ["MotoGP", "WRC Ралли", "Superbike"];
-
 export default function ProfilePage() {
+  const { user, logout } = useAuth();
+  const U = user || {
+    display_name: "Гость",
+    username: "guest",
+    bio: "",
+    avatar_emoji: "🏁",
+    posts_count: 0,
+    followers_count: 0,
+    following_count: 0,
+    is_verified: false,
+    favorite_sports: [] as string[],
+  };
+
   return (
     <div className="pb-4">
       {/* Header */}
@@ -39,7 +40,7 @@ export default function ProfilePage() {
           <button className="text-muted-foreground hover:text-white transition-colors">
             <Icon name="Settings" size={22} />
           </button>
-          <button className="text-muted-foreground hover:text-white transition-colors">
+          <button onClick={logout} className="text-muted-foreground hover:text-red-400 transition-colors">
             <Icon name="LogOut" size={20} />
           </button>
         </div>
@@ -59,7 +60,7 @@ export default function ProfilePage() {
         <div className="bg-card border border-t-0 border-border rounded-b-xl px-4 pb-4">
           <div className="flex items-end justify-between -mt-8 mb-3">
             <div className="w-16 h-16 rounded-full bg-secondary border-4 border-card flex items-center justify-center text-3xl">
-              {USER.avatar}
+              {U.avatar_emoji}
             </div>
             <button className="fire-gradient text-white px-4 py-2 rounded-lg font-oswald font-semibold text-sm tracking-wide">
               РЕДАКТИРОВАТЬ
@@ -67,25 +68,27 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex items-center gap-2 mb-0.5">
-            <h2 className="font-oswald text-white text-xl font-bold">{USER.name}</h2>
-            {USER.verified && <Icon name="BadgeCheck" size={18} className="text-fire" />}
+            <h2 className="font-oswald text-white text-xl font-bold">{U.display_name}</h2>
+            {U.is_verified && <Icon name="BadgeCheck" size={18} className="text-fire" />}
           </div>
-          <p className="text-muted-foreground text-xs font-roboto mb-2">{USER.username}</p>
-          <p className="text-white/80 text-sm font-roboto mb-3">{USER.bio}</p>
+          <p className="text-muted-foreground text-xs font-roboto mb-2">@{U.username}</p>
+          {U.bio && <p className="text-white/80 text-sm font-roboto mb-3">{U.bio}</p>}
 
           {/* Favorites */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {FAVORITES.map(f => (
-              <span key={f} className="bg-fire/10 border border-fire/30 text-fire text-xs font-oswald font-bold px-2 py-1 rounded-full tracking-wide">{f}</span>
-            ))}
-          </div>
+          {U.favorite_sports.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {U.favorite_sports.map(f => (
+                <span key={f} className="bg-fire/10 border border-fire/30 text-fire text-xs font-oswald font-bold px-2 py-1 rounded-full tracking-wide">{f}</span>
+              ))}
+            </div>
+          )}
 
           {/* Stats */}
           <div className="flex gap-0 divide-x divide-border">
             {[
-              { label: "Публикации", value: USER.posts },
-              { label: "Подписчики", value: USER.followers.toLocaleString() },
-              { label: "Подписки", value: USER.following },
+              { label: "Публикации", value: U.posts_count },
+              { label: "Подписчики", value: U.followers_count.toLocaleString() },
+              { label: "Подписки", value: U.following_count },
             ].map((s) => (
               <div key={s.label} className="flex-1 flex flex-col items-center py-2">
                 <span className="font-oswald font-bold text-white text-xl">{s.value}</span>

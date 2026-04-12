@@ -1,5 +1,7 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
+import { useAuth } from "@/context/AuthContext";
+import AuthScreen from "@/components/AuthScreen";
 import FeedPage from "@/components/FeedPage";
 import EventsPage from "@/components/EventsPage";
 import CalendarPage from "@/components/CalendarPage";
@@ -21,7 +23,25 @@ const NAV_ITEMS: { id: Tab; icon: string; label: string; badge?: number }[] = [
 ];
 
 export default function Index() {
+  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("feed");
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 fire-gradient rounded-2xl flex items-center justify-center text-3xl animate-pulse">
+            🏁
+          </div>
+          <span className="font-oswald text-xl text-white tracking-widest">MOTO<span className="text-fire">FEED</span></span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
 
   const renderPage = () => {
     switch (activeTab) {
