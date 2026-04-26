@@ -10,7 +10,7 @@ const GRID_SIZE = 32;
 
 export default function LivePreview({ status, previewHtml }: Props) {
   return (
-    <div className="relative flex-1 overflow-hidden bg-[#07070c] min-h-0">
+    <div className="relative flex-1 min-w-0 min-h-0 overflow-hidden bg-[#07070c]">
       {/* Grid background */}
       <div
         className="absolute inset-0 opacity-[0.25]"
@@ -28,7 +28,7 @@ export default function LivePreview({ status, previewHtml }: Props) {
 
       {/* Content */}
       <AnimatePresence mode="wait">
-        {/* IDLE — placeholder */}
+        {/* IDLE */}
         {status === "idle" && !previewHtml && (
           <motion.div
             key="idle"
@@ -36,30 +36,29 @@ export default function LivePreview({ status, previewHtml }: Props) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-8 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center"
           >
             <motion.div
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-700/30 border border-violet-500/20 flex items-center justify-center"
+              className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-700/30 border border-violet-500/20 flex items-center justify-center"
             >
-              <Icon name="Sparkles" size={26} className="text-violet-400" />
+              <Icon name="Sparkles" size={22} className="text-violet-400" />
             </motion.div>
             <div>
-              <p className="text-white/80 text-base font-medium leading-snug max-w-xs">
-                Опишите ваш проект справа —<br />
+              <p className="text-white/80 text-sm font-medium leading-snug max-w-xs">
+                Опишите ваш проект —<br />
                 <span className="text-violet-400">магия начнётся здесь</span>
               </p>
-              <p className="text-white/25 text-xs mt-2 font-medium">
-                Сайт появится в этой области в реальном времени
+              <p className="text-white/25 text-xs mt-2">
+                Сайт появится в этой области
               </p>
             </div>
 
-            {/* Corner decorations */}
-            <div className="absolute top-4 left-4 w-6 h-6 border-l border-t border-white/10 rounded-tl-sm" />
-            <div className="absolute top-4 right-4 w-6 h-6 border-r border-t border-white/10 rounded-tr-sm" />
-            <div className="absolute bottom-4 left-4 w-6 h-6 border-l border-b border-white/10 rounded-bl-sm" />
-            <div className="absolute bottom-4 right-4 w-6 h-6 border-r border-b border-white/10 rounded-br-sm" />
+            <div className="absolute top-4 left-4 w-5 h-5 border-l border-t border-white/10 rounded-tl-sm" />
+            <div className="absolute top-4 right-4 w-5 h-5 border-r border-t border-white/10 rounded-tr-sm" />
+            <div className="absolute bottom-4 left-4 w-5 h-5 border-l border-b border-white/10 rounded-bl-sm" />
+            <div className="absolute bottom-4 right-4 w-5 h-5 border-r border-b border-white/10 rounded-br-sm" />
           </motion.div>
         )}
 
@@ -72,7 +71,6 @@ export default function LivePreview({ status, previewHtml }: Props) {
             exit={{ opacity: 0 }}
             className="absolute inset-0 flex flex-col items-center justify-center gap-4"
           >
-            {/* Animated scanning line */}
             <motion.div
               className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-400/60 to-transparent"
               animate={{ top: ["10%", "90%", "10%"] }}
@@ -92,8 +90,8 @@ export default function LivePreview({ status, previewHtml }: Props) {
           </motion.div>
         )}
 
-        {/* DONE — iframe preview */}
-        {status === "done" && previewHtml && (
+        {/* DONE — iframe */}
+        {(status === "done" || (previewHtml && status !== "generating")) && previewHtml && (
           <motion.div
             key="preview"
             initial={{ opacity: 0 }}

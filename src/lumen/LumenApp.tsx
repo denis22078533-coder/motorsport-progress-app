@@ -8,6 +8,7 @@ import LumenLoginPage from "./LumenLoginPage";
 import { useLumenAuth } from "./useLumenAuth";
 
 type Status = "idle" | "generating" | "done" | "error";
+type MobileTab = "chat" | "preview";
 
 interface Message {
   id: number;
@@ -39,6 +40,7 @@ export default function LumenApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
   const [settings, setSettings] = useState<Settings>(() => {
     try {
       const saved = localStorage.getItem("lumen_settings");
@@ -129,8 +131,6 @@ export default function LumenApp() {
         html = (data.content as { text: string }[])?.[0]?.text ?? "";
       }
 
-
-      // extract HTML: markdown block → <html> tag → <!DOCTYPE → raw fallback
       const mdMatch = html.match(/```html\s*\n([\s\S]*?)```/i) || html.match(/```\s*\n([\s\S]*?)```/);
       if (mdMatch) {
         html = mdMatch[1].trim();
@@ -150,10 +150,12 @@ export default function LumenApp() {
       if (!abortRef.current) {
         setPreviewHtml(cleanHtml);
         setStatus("done");
+        // На мобиле — автоматически переключаемся на вкладку превью
+        setMobileTab("preview");
         setMessages(prev => [...prev, {
           id: ++msgCounter,
           role: "assistant",
-          text: "Готово! Сайт отображается в превью. Хотите что-то изменить?",
+          text: "Готово! Сайт сгенерирован. Хотите что-то изменить?",
         }]);
       }
     } catch (err) {
@@ -174,6 +176,7 @@ export default function LumenApp() {
     setMessages([]);
     setPreviewHtml(null);
     setStatus("idle");
+    setMobileTab("chat");
   };
 
   const handleExport = () => {
@@ -205,7 +208,8 @@ export default function LumenApp() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="h-screen flex flex-col bg-[#07070c] overflow-hidden"
+          className="h-dvh flex flex-col bg-[#07070c] overflow-hidden"
+          style={{ maxWidth: "100vw" }}
         >
           <LumenTopBar
             status={status}
@@ -215,15 +219,60 @@ export default function LumenApp() {
             onLogout={logout}
           />
 
+          {/* Mobile tab switcher */}
+          <div className="md:hidden flex shrink-0 border-b border-white/[0.06] bg-[#0a0a0f]">
+            <button
+              onClick={() => setMobileTab("chat")}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                mobileTab === "chat"
+                  ? "text-violet-400 border-b-2 border-violet-500"
+                  : "text-white/40 border-b-2 border-transparent"
+              }`}
+            >
+              <span>💬</span> Чат
+            </button>
+            <button
+              onClick={() => setMobileTab("preview")}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 relative ${
+                mobileTab === "preview"
+                  ? "text-violet-400 border-b-2 border-violet-500"
+                  : "text-white/40 border-b-2 border-transparent"
+              }`}
+            >
+              <span>🖥️</span> Сайт
+              {previewHtml && mobileTab !== "preview" && (
+                <span className="absolute top-1.5 right-6 w-2 h-2 rounded-full bg-emerald-400" />
+              )}
+            </button>
+          </div>
+
           {/* Main area */}
-          <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-            <LivePreview status={status} previewHtml={previewHtml} />
-            <ChatPanel
-              status={status}
-              messages={messages}
-              onSend={handleSend}
-              onStop={handleStop}
-            />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {/* Desktop: side-by-side */}
+            <div className="hidden md:flex h-full">
+              <LivePreview status={status} previewHtml={previewHtml} />
+              <ChatPanel
+                status={status}
+                messages={messages}
+                onSend={handleSend}
+                onStop={handleStop}
+              />
+            </div>
+
+            {/* Mobile: tabs */}
+            <div className="md:hidden h-full">
+              {mobileTab === "chat" ? (
+                <ChatPanel
+                  status={status}
+                  messages={messages}
+                  onSend={handleSend}
+                  onStop={handleStop}
+                  onOpenPreview={previewHtml ? () => setMobileTab("preview") : undefined}
+                />
+              ) : (
+                <LivePreview status={status} previewHtml={previewHtml} />
+              )}
+            </div>
           </div>
 
           <SettingsDrawer

@@ -13,6 +13,7 @@ interface Props {
   messages: Message[];
   onSend: (text: string) => void;
   onStop: () => void;
+  onOpenPreview?: () => void;
 }
 
 const SUGGESTIONS = [
@@ -22,7 +23,7 @@ const SUGGESTIONS = [
   "Интернет-магазин одежды",
 ];
 
-export default function ChatPanel({ status, messages, onSend, onStop }: Props) {
+export default function ChatPanel({ status, messages, onSend, onStop, onOpenPreview }: Props) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -50,26 +51,21 @@ export default function ChatPanel({ status, messages, onSend, onStop }: Props) {
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
     e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+    e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
   };
 
   const toggleVoice = () => setListening(p => !p);
 
   return (
-    <motion.aside
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-      className="w-full md:w-[340px] md:max-w-[340px] shrink-0 flex flex-col border-t md:border-t-0 md:border-l border-white/[0.06] bg-[#0a0a0f]"
-    >
+    <div className="w-full h-full flex flex-col bg-[#0a0a0f] overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
         <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
         <span className="text-white/60 text-xs font-medium tracking-wide uppercase">Описание проекта</span>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 min-h-0 scrollbar-hide">
+      {/* Messages — scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3">
         <AnimatePresence initial={false}>
           {messages.length === 0 && (
             <motion.div
@@ -103,7 +99,7 @@ export default function ChatPanel({ status, messages, onSend, onStop }: Props) {
               transition={{ duration: 0.25 }}
               className={`flex flex-col gap-1 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
-              <div className={`max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+              <div className={`max-w-[88%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
                 msg.role === "user"
                   ? "bg-violet-600/80 text-white rounded-tr-sm"
                   : "bg-white/[0.05] border border-white/[0.08] text-white/70 rounded-tl-sm"
@@ -141,11 +137,28 @@ export default function ChatPanel({ status, messages, onSend, onStop }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
-      <div className="p-3 border-t border-white/[0.06]">
+      {/* "View site" button — shown when preview is ready (mobile only) */}
+      {onOpenPreview && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-3 pb-1 shrink-0"
+        >
+          <button
+            onClick={onOpenPreview}
+            className="w-full h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <Icon name="ExternalLink" size={14} />
+            Посмотреть сайт
+          </button>
+        </motion.div>
+      )}
+
+      {/* Input area — fixed at bottom */}
+      <div className="px-3 pb-3 pt-2 border-t border-white/[0.06] shrink-0">
         <div className="flex flex-col gap-2">
           {/* Textarea */}
-          <div className="relative flex items-end gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-violet-500/40 transition-colors">
+          <div className="flex items-end gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-violet-500/40 transition-colors">
             <textarea
               ref={textareaRef}
               value={value}
@@ -154,9 +167,8 @@ export default function ChatPanel({ status, messages, onSend, onStop }: Props) {
               disabled={isGenerating}
               placeholder="Опишите сайт, который хотите создать..."
               rows={1}
-              className="flex-1 bg-transparent text-white/80 text-sm placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px]"
+              className="flex-1 bg-transparent text-white/80 text-sm placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[100px]"
             />
-            {/* Mic */}
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={toggleVoice}
@@ -175,48 +187,39 @@ export default function ChatPanel({ status, messages, onSend, onStop }: Props) {
             </motion.button>
           </div>
 
-          {/* Play / Stop */}
-          <div className="flex gap-2">
-            <AnimatePresence mode="wait">
-              {isGenerating ? (
-                <motion.button
-                  key="stop"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={onStop}
-                  className="flex-1 h-10 rounded-xl bg-red-500/15 border border-red-500/25 hover:bg-red-500/25 text-red-400 font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Icon name="Square" size={15} />
-                  Стоп
-                </motion.button>
-              ) : (
-                <motion.button
-                  key="play"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleSend}
-                  disabled={!value.trim()}
-                  className="flex-1 h-10 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Icon name="Play" size={15} />
-                  Запустить
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* Mobile export */}
-            <button className="sm:hidden w-10 h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white flex items-center justify-center transition-colors">
-              <Icon name="Download" size={15} />
-            </button>
-          </div>
+          {/* Send / Stop */}
+          <AnimatePresence mode="wait">
+            {isGenerating ? (
+              <motion.button
+                key="stop"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={onStop}
+                className="w-full h-10 rounded-xl bg-red-500/15 border border-red-500/25 hover:bg-red-500/25 text-red-400 font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <Icon name="Square" size={15} />
+                Стоп
+              </motion.button>
+            ) : (
+              <motion.button
+                key="play"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleSend}
+                disabled={!value.trim()}
+                className="w-full h-10 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <Icon name="Play" size={15} />
+                Запустить
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-    </motion.aside>
+    </div>
   );
 }
