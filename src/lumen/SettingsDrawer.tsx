@@ -151,11 +151,11 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Prop
                   type="text"
                   value={form.baseUrl}
                   onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value.trim() }))}
-                  placeholder={form.provider === "openai" ? "https://proxyapi.ru" : "https://api.anthropic.com"}
+                  placeholder={form.provider === "openai" ? "proxyapi.ru" : "https://api.anthropic.com"}
                   className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-violet-500/40 transition-colors"
                 />
                 <p className="text-white/20 text-xs mt-1.5">
-                  Пример: proxyapi.ru — оставьте пустым для значения по умолчанию.
+                  Для ProxyAPI введите: proxyapi.ru — адрес API подставится автоматически.
                 </p>
               </div>
 
