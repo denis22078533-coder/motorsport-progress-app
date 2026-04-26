@@ -65,11 +65,16 @@ export default function LumenApp() {
 
       if (settings.provider === "openai") {
         const base = (settings.baseUrl || "https://proxyapi.ru").replace(/\/$/, "");
-        const res = await fetch(`${base}/v1/chat/completions`, {
+        const endpoint = base.endsWith("/v1")
+          ? `${base}/chat/completions`
+          : `${base}/v1/chat/completions`;
+        console.log("[Lumen] OpenAI request →", endpoint);
+        const res = await fetch(endpoint, {
           method: "POST",
+          mode: "cors",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${settings.apiKey}`,
+            "Authorization": `Bearer ${settings.apiKey}`,
           },
           body: JSON.stringify({
             model: settings.model,
@@ -85,8 +90,13 @@ export default function LumenApp() {
         html = data.choices?.[0]?.message?.content ?? "";
       } else {
         const base = (settings.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
-        const res = await fetch(`${base}/v1/messages`, {
+        const endpoint = base.endsWith("/v1")
+          ? `${base}/messages`
+          : `${base}/v1/messages`;
+        console.log("[Lumen] Claude request →", endpoint);
+        const res = await fetch(endpoint, {
           method: "POST",
+          mode: "cors",
           headers: {
             "Content-Type": "application/json",
             "x-api-key": settings.apiKey,
