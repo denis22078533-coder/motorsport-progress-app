@@ -63,20 +63,19 @@ export default function LumenApp() {
     try {
       let html = "";
 
+      const PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
+
       if (settings.provider === "openai") {
-        const base = (settings.baseUrl || "https://proxyapi.ru").replace(/\/$/, "");
-        const endpoint = base.endsWith("/v1")
-          ? `${base}/chat/completions`
-          : `${base}/v1/chat/completions`;
-        console.log("[Lumen] OpenAI request →", endpoint);
-        const res = await fetch(endpoint, {
+        console.log("[Lumen] OpenAI via proxy →", PROXY_URL, "| base:", settings.baseUrl);
+        const res = await fetch(PROXY_URL, {
           method: "POST",
-          mode: "cors",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${settings.apiKey}`,
+            "X-Api-Key": settings.apiKey,
+            "X-Base-Url": settings.baseUrl || "https://proxyapi.ru",
           },
           body: JSON.stringify({
+            __provider__: "openai",
             model: settings.model,
             messages: [
               { role: "system", content: SYSTEM_PROMPT },
@@ -86,24 +85,19 @@ export default function LumenApp() {
           }),
         });
         const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
+        if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
         html = data.choices?.[0]?.message?.content ?? "";
       } else {
-        const base = (settings.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
-        const endpoint = base.endsWith("/v1")
-          ? `${base}/messages`
-          : `${base}/v1/messages`;
-        console.log("[Lumen] Claude request →", endpoint);
-        const res = await fetch(endpoint, {
+        console.log("[Lumen] Claude via proxy →", PROXY_URL, "| base:", settings.baseUrl);
+        const res = await fetch(PROXY_URL, {
           method: "POST",
-          mode: "cors",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": settings.apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-access": "true",
+            "X-Api-Key": settings.apiKey,
+            "X-Base-Url": settings.baseUrl || "https://api.anthropic.com",
           },
           body: JSON.stringify({
+            __provider__: "claude",
             model: settings.model,
             max_tokens: 4096,
             system: SYSTEM_PROMPT,
@@ -111,9 +105,10 @@ export default function LumenApp() {
           }),
         });
         const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
+        if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
         html = data.content?.[0]?.text ?? "";
       }
+
 
       // extract HTML if wrapped in markdown
       const htmlMatch = html.match(/```html\n?([\s\S]*?)```/) || html.match(/(<!DOCTYPE[\s\S]*)/i);
