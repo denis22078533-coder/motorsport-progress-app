@@ -83,6 +83,7 @@ export default function LumenApp() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${settings.apiKey.trim()}`,
             "X-Api-Key": settings.apiKey.trim(),
             "X-Base-Url": baseUrl,
           },
@@ -96,9 +97,12 @@ export default function LumenApp() {
             max_tokens: 4096,
           }),
         });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
-        html = data.choices?.[0]?.message?.content ?? "";
+        const rawText = await res.text();
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(rawText); }
+        catch { throw new Error("Ошибка адреса прокси. Проверьте Base URL в настройках"); }
+        if (!res.ok || data.error) throw new Error((data.error as { message?: string })?.message || `HTTP ${res.status}`);
+        html = (data.choices as { message: { content: string } }[])?.[0]?.message?.content ?? "";
       } else {
         const baseUrl = cleanBaseUrl(settings.baseUrl, "https://api.anthropic.com");
         console.log("[Lumen] Claude via proxy →", PROXY_URL, "| base:", baseUrl);
@@ -117,9 +121,12 @@ export default function LumenApp() {
             messages: [{ role: "user", content: text }],
           }),
         });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
-        html = data.content?.[0]?.text ?? "";
+        const rawText = await res.text();
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(rawText); }
+        catch { throw new Error("Ошибка адреса прокси. Проверьте Base URL в настройках"); }
+        if (!res.ok || data.error) throw new Error((data.error as { message?: string })?.message || `HTTP ${res.status}`);
+        html = (data.content as { text: string }[])?.[0]?.text ?? "";
       }
 
 

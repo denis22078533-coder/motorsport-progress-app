@@ -1,7 +1,17 @@
 import json
 import urllib.request
 import urllib.error
-import os
+import re
+
+
+def clean_base_url(raw: str, fallback: str) -> str:
+    url = (raw or "").strip().rstrip("/")
+    if not url:
+        return fallback
+    if not re.match(r"^https?://", url):
+        url = "https://" + url
+    url = re.sub(r"/+", "/", url.replace("://", "|||")).replace("|||", "://")
+    return url
 
 
 def handler(event: dict, context) -> dict:
@@ -23,13 +33,12 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Invalid JSON body"})}
 
     headers = event.get("headers") or {}
-    api_key = headers.get("x-api-key") or headers.get("X-Api-Key", "")
-    base_url = headers.get("x-base-url") or headers.get("X-Base-Url", "https://proxyapi.ru")
+    api_key = (headers.get("x-api-key") or headers.get("X-Api-Key") or "").strip()
+    raw_base = headers.get("x-base-url") or headers.get("X-Base-Url") or ""
     provider = body.pop("__provider__", "openai")
 
-    base_url = base_url.rstrip("/")
-
     if provider == "openai":
+        base_url = clean_base_url(raw_base, "https://proxyapi.ru")
         if base_url.endswith("/v1"):
             endpoint = f"{base_url}/chat/completions"
         else:
@@ -39,6 +48,7 @@ def handler(event: dict, context) -> dict:
             "Authorization": f"Bearer {api_key}",
         }
     else:
+        base_url = clean_base_url(raw_base, "https://api.anthropic.com")
         if base_url.endswith("/v1"):
             endpoint = f"{base_url}/messages"
         else:
@@ -48,6 +58,8 @@ def handler(event: dict, context) -> dict:
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
         }
+
+    print(f"[lumen-proxy] endpoint={endpoint} provider={provider}")
 
     payload = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(endpoint, data=payload, headers=req_headers, method="POST")

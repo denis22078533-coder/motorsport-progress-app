@@ -155,7 +155,7 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Prop
                   className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-violet-500/40 transition-colors"
                 />
                 <p className="text-white/20 text-xs mt-1.5">
-                  Оставьте стандартным или введите адрес прокси.
+                  Пример: proxyapi.ru — оставьте пустым для значения по умолчанию.
                 </p>
               </div>
 
