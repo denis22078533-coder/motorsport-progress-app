@@ -1,9 +1,11 @@
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import LumenTopBar from "./LumenTopBar";
 import LivePreview from "./LivePreview";
 import ChatPanel from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
+import LumenLoginPage from "./LumenLoginPage";
+import { useLumenAuth } from "./useLumenAuth";
 
 type Status = "idle" | "generating" | "done" | "error";
 
@@ -30,6 +32,7 @@ const SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ �
 let msgCounter = 0;
 
 export default function LumenApp() {
+  const { authed, login, logout } = useLumenAuth();
   const [status, setStatus] = useState<Status>("idle");
   const [messages, setMessages] = useState<Message[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -149,36 +152,47 @@ export default function LumenApp() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className="h-screen flex flex-col bg-[#07070c] overflow-hidden"
-    >
-      <LumenTopBar
-        status={status}
-        onNewProject={handleNewProject}
-        onExport={handleExport}
-        onSettings={() => setSettingsOpen(true)}
-      />
+    <AnimatePresence mode="wait">
+      {!authed ? (
+        <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+          <LumenLoginPage onLogin={login} />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="app"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="h-screen flex flex-col bg-[#07070c] overflow-hidden"
+        >
+          <LumenTopBar
+            status={status}
+            onNewProject={handleNewProject}
+            onExport={handleExport}
+            onSettings={() => setSettingsOpen(true)}
+            onLogout={logout}
+          />
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-        <LivePreview status={status} previewHtml={previewHtml} />
-        <ChatPanel
-          status={status}
-          messages={messages}
-          onSend={handleSend}
-          onStop={handleStop}
-        />
-      </div>
+          {/* Main area */}
+          <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+            <LivePreview status={status} previewHtml={previewHtml} />
+            <ChatPanel
+              status={status}
+              messages={messages}
+              onSend={handleSend}
+              onStop={handleStop}
+            />
+          </div>
 
-      <SettingsDrawer
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        settings={settings}
-        onSave={handleSaveSettings}
-      />
-    </motion.div>
+          <SettingsDrawer
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            settings={settings}
+            onSave={handleSaveSettings}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
