@@ -26,8 +26,25 @@ const SUGGESTIONS = [
 export default function ChatPanel({ status, messages, onSend, onStop, onOpenPreview }: Props) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
+  const [kbOffset, setKbOffset] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Visual Viewport API — поднимаем инпут над клавиатурой на iOS Safari
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop;
+      setKbOffset(Math.max(0, offset));
+    };
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
+  }, []);
   const isGenerating = status === "generating";
 
   useEffect(() => {
@@ -57,7 +74,10 @@ export default function ChatPanel({ status, messages, onSend, onStop, onOpenPrev
   const toggleVoice = () => setListening(p => !p);
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#0a0a0f] overflow-hidden">
+    <div
+      className="w-full h-full flex flex-col bg-[#0a0a0f] overflow-hidden"
+      style={{ paddingBottom: kbOffset > 0 ? kbOffset : undefined }}
+    >
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
         <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
@@ -167,7 +187,8 @@ export default function ChatPanel({ status, messages, onSend, onStop, onOpenPrev
               disabled={isGenerating}
               placeholder="Опишите сайт, который хотите создать..."
               rows={1}
-              className="flex-1 bg-transparent text-white/80 text-sm placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[100px]"
+              className="flex-1 bg-transparent text-white/80 placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[100px]"
+              style={{ fontSize: "16px" }}
             />
             <motion.button
               whileTap={{ scale: 0.9 }}
