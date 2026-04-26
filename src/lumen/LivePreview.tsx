@@ -10,7 +10,7 @@ const GRID_SIZE = 32;
 
 export default function LivePreview({ status, previewHtml }: Props) {
   return (
-    <div className="relative flex-1 min-w-0 min-h-0 overflow-hidden bg-[#07070c]">
+    <div className="relative flex-1 w-full h-full min-w-0 min-h-0 overflow-hidden bg-[#07070c]">
       {/* Grid background */}
       <div
         className="absolute inset-0 opacity-[0.25]"

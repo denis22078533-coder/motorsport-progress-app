@@ -247,9 +247,9 @@ export default function LumenApp() {
           </div>
 
           {/* Main area */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {/* Desktop: side-by-side */}
-            <div className="hidden md:flex h-full">
+            <div className="hidden md:flex flex-1 min-h-0">
               <LivePreview status={status} previewHtml={previewHtml} />
               <ChatPanel
                 status={status}
@@ -259,8 +259,8 @@ export default function LumenApp() {
               />
             </div>
 
-            {/* Mobile: tabs */}
-            <div className="md:hidden h-full">
+            {/* Mobile: tabs — flex-1 чтобы занять всё оставшееся место */}
+            <div className="md:hidden flex-1 min-h-0 flex flex-col">
               {mobileTab === "chat" ? (
                 <ChatPanel
                   status={status}
