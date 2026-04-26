@@ -81,7 +81,7 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Prop
                   {(["openai", "claude"] as const).map((p) => (
                     <button
                       key={p}
-                      onClick={() => setForm(f => ({ ...f, provider: p, model: MODELS[p][0] }))}
+                      onClick={() => setForm(f => ({ ...f, provider: p, model: MODELS[p][0], baseUrl: p === "openai" ? "https://proxyapi.ru" : "https://api.anthropic.com" }))}
                       className={`h-9 rounded-lg border text-sm font-medium transition-all ${
                         form.provider === p
                           ? "border-violet-500/50 bg-violet-500/10 text-violet-300"
@@ -151,7 +151,7 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Prop
                   type="text"
                   value={form.baseUrl}
                   onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
-                  placeholder="https://proxyapi.ru"
+                  placeholder={form.provider === "openai" ? "https://proxyapi.ru" : "https://api.anthropic.com"}
                   className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-violet-500/40 transition-colors"
                 />
                 <p className="text-white/20 text-xs mt-1.5">

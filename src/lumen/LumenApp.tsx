@@ -84,7 +84,8 @@ export default function LumenApp() {
         if (data.error) throw new Error(data.error.message);
         html = data.choices?.[0]?.message?.content ?? "";
       } else {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const base = (settings.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
+        const res = await fetch(`${base}/v1/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
