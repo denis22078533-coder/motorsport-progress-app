@@ -65,67 +65,67 @@ export default function LumenApp() {
 
       const PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
 
-      const cleanBaseUrl = (url: string, fallback: string): string => {
-        const trimmed = (url || "").trim().replace(/\/+$/, "");
-        if (!trimmed) return fallback;
-        try {
-          const parsed = new URL(trimmed);
-          return parsed.origin + parsed.pathname.replace(/\/+$/, "");
-        } catch {
-          return fallback;
-        }
-      };
+      const rawBase = (settings.baseUrl || "").trim().replace(/\/+$/, "");
+      const baseUrl = rawBase || "https://proxyapi.ru";
 
-      if (settings.provider === "openai") {
-        const baseUrl = cleanBaseUrl(settings.baseUrl, "https://proxyapi.ru");
-        console.log("[Lumen] OpenAI via proxy →", PROXY_URL, "| base:", baseUrl);
-        const res = await fetch(PROXY_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${settings.apiKey.trim()}`,
-            "X-Api-Key": settings.apiKey.trim(),
-            "X-Base-Url": baseUrl,
-          },
-          body: JSON.stringify({
+      const isOpenAI = settings.provider === "openai";
+      const requestBody = isOpenAI
+        ? {
             __provider__: "openai",
+            __base_url__: baseUrl,
+            __api_key__: settings.apiKey.trim(),
             model: settings.model,
             messages: [
               { role: "system", content: SYSTEM_PROMPT },
               { role: "user", content: text },
             ],
             max_tokens: 4096,
-          }),
-        });
-        const rawText = await res.text();
-        let data: Record<string, unknown>;
-        try { data = JSON.parse(rawText); }
-        catch { throw new Error("Ошибка адреса прокси. Проверьте Base URL в настройках"); }
-        if (!res.ok || data.error) throw new Error((data.error as { message?: string })?.message || `HTTP ${res.status}`);
-        html = (data.choices as { message: { content: string } }[])?.[0]?.message?.content ?? "";
-      } else {
-        const baseUrl = cleanBaseUrl(settings.baseUrl, "https://api.anthropic.com");
-        console.log("[Lumen] Claude via proxy →", PROXY_URL, "| base:", baseUrl);
-        const res = await fetch(PROXY_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Api-Key": settings.apiKey.trim(),
-            "X-Base-Url": baseUrl,
-          },
-          body: JSON.stringify({
+          }
+        : {
             __provider__: "claude",
+            __base_url__: baseUrl,
+            __api_key__: settings.apiKey.trim(),
             model: settings.model,
             max_tokens: 4096,
             system: SYSTEM_PROMPT,
             messages: [{ role: "user", content: text }],
-          }),
+          };
+
+      console.log("[Lumen] proxy →", PROXY_URL, "| base:", baseUrl, "| provider:", settings.provider);
+
+      let res: Response;
+      try {
+        res = await fetch(PROXY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
         });
-        const rawText = await res.text();
-        let data: Record<string, unknown>;
-        try { data = JSON.parse(rawText); }
-        catch { throw new Error("Ошибка адреса прокси. Проверьте Base URL в настройках"); }
-        if (!res.ok || data.error) throw new Error((data.error as { message?: string })?.message || `HTTP ${res.status}`);
+      } catch (networkErr) {
+        throw new Error(`Сетевая ошибка (нет связи с сервером): ${String(networkErr)}`);
+      }
+
+      const rawText = await res.text();
+      console.log("[Lumen] response status:", res.status, "| body:", rawText.slice(0, 300));
+
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(
+          `Сервер вернул не JSON (HTTP ${res.status}). Ответ: ${rawText.slice(0, 200)}`
+        );
+      }
+
+      if (!res.ok || data.error) {
+        const errMsg = (data.error as { message?: string } | string | undefined);
+        const detail = typeof errMsg === "string" ? errMsg : errMsg?.message;
+        const endpoint = data.__endpoint__ ? `\nURL: ${data.__endpoint__}` : "";
+        throw new Error(`HTTP ${res.status}: ${detail || rawText.slice(0, 200)}${endpoint}`);
+      }
+
+      if (isOpenAI) {
+        html = (data.choices as { message: { content: string } }[])?.[0]?.message?.content ?? "";
+      } else {
         html = (data.content as { text: string }[])?.[0]?.text ?? "";
       }
 
