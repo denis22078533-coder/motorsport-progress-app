@@ -65,14 +65,26 @@ export default function LumenApp() {
 
       const PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
 
+      const cleanBaseUrl = (url: string, fallback: string): string => {
+        const trimmed = (url || "").trim().replace(/\/+$/, "");
+        if (!trimmed) return fallback;
+        try {
+          const parsed = new URL(trimmed);
+          return parsed.origin + parsed.pathname.replace(/\/+$/, "");
+        } catch {
+          return fallback;
+        }
+      };
+
       if (settings.provider === "openai") {
-        console.log("[Lumen] OpenAI via proxy →", PROXY_URL, "| base:", settings.baseUrl);
+        const baseUrl = cleanBaseUrl(settings.baseUrl, "https://proxyapi.ru");
+        console.log("[Lumen] OpenAI via proxy →", PROXY_URL, "| base:", baseUrl);
         const res = await fetch(PROXY_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Api-Key": settings.apiKey,
-            "X-Base-Url": settings.baseUrl || "https://proxyapi.ru",
+            "X-Api-Key": settings.apiKey.trim(),
+            "X-Base-Url": baseUrl,
           },
           body: JSON.stringify({
             __provider__: "openai",
@@ -88,13 +100,14 @@ export default function LumenApp() {
         if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
         html = data.choices?.[0]?.message?.content ?? "";
       } else {
-        console.log("[Lumen] Claude via proxy →", PROXY_URL, "| base:", settings.baseUrl);
+        const baseUrl = cleanBaseUrl(settings.baseUrl, "https://api.anthropic.com");
+        console.log("[Lumen] Claude via proxy →", PROXY_URL, "| base:", baseUrl);
         const res = await fetch(PROXY_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Api-Key": settings.apiKey,
-            "X-Base-Url": settings.baseUrl || "https://api.anthropic.com",
+            "X-Api-Key": settings.apiKey.trim(),
+            "X-Base-Url": baseUrl,
           },
           body: JSON.stringify({
             __provider__: "claude",
