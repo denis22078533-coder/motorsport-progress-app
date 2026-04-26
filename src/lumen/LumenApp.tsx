@@ -130,19 +130,31 @@ export default function LumenApp() {
       }
 
 
-      // extract HTML if wrapped in markdown
-      const htmlMatch = html.match(/```html\n?([\s\S]*?)```/) || html.match(/(<!DOCTYPE[\s\S]*)/i);
-      const cleanHtml = htmlMatch ? (htmlMatch[1] || htmlMatch[0]) : html;
+      // extract HTML: markdown block → <html> tag → <!DOCTYPE → raw fallback
+      const mdMatch = html.match(/```html\s*\n([\s\S]*?)```/i) || html.match(/```\s*\n([\s\S]*?)```/);
+      if (mdMatch) {
+        html = mdMatch[1].trim();
+      }
+      const tagMatch = html.match(/(<!DOCTYPE[\s\S]*)/i) || html.match(/(<html[\s\S]*)/i);
+      const cleanHtml = tagMatch ? tagMatch[1].trim() : html.trim();
+
+      console.log("[Lumen] cleanHtml preview (200 chars):", cleanHtml.slice(0, 200));
+
+      const hasHtml = /<[a-z][\s\S]*>/i.test(cleanHtml);
+      if (!hasHtml) {
+        throw new Error(
+          `Модель вернула не HTML. Ответ: "${cleanHtml.slice(0, 300)}". Попробуйте ещё раз или смените модель.`
+        );
+      }
 
       if (!abortRef.current) {
         setPreviewHtml(cleanHtml);
         setStatus("done");
-        const assistantMsg: Message = {
+        setMessages(prev => [...prev, {
           id: ++msgCounter,
           role: "assistant",
-          text: "Сайт сгенерирован! Вы можете посмотреть его в превью слева. Хотите что-то изменить?",
-        };
-        setMessages(prev => [...prev, assistantMsg]);
+          text: "Готово! Сайт отображается в превью. Хотите что-то изменить?",
+        }]);
       }
     } catch (err) {
       if (!abortRef.current) {
