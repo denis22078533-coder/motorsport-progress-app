@@ -9,8 +9,9 @@ interface Props {
     apiKey: string;
     provider: "openai" | "claude";
     model: string;
+    baseUrl: string;
   };
-  onSave: (s: { apiKey: string; provider: "openai" | "claude"; model: string }) => void;
+  onSave: (s: { apiKey: string; provider: "openai" | "claude"; model: string; baseUrl: string }) => void;
 }
 
 const MODELS = {
@@ -138,6 +139,23 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Prop
                 </div>
                 <p className="text-white/20 text-xs mt-1.5 leading-relaxed">
                   Ключ хранится только в браузере и никуда не отправляется.
+                </p>
+              </div>
+
+              {/* Base URL */}
+              <div>
+                <label className="text-white/40 text-xs font-medium uppercase tracking-wider block mb-2">
+                  Base URL (Адрес прокси)
+                </label>
+                <input
+                  type="text"
+                  value={form.baseUrl}
+                  onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
+                  placeholder="https://proxyapi.ru"
+                  className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-violet-500/40 transition-colors"
+                />
+                <p className="text-white/20 text-xs mt-1.5">
+                  Оставьте стандартным или введите адрес прокси.
                 </p>
               </div>
 

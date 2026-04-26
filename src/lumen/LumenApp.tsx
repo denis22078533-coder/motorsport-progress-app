@@ -19,12 +19,14 @@ interface Settings {
   apiKey: string;
   provider: "openai" | "claude";
   model: string;
+  baseUrl: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   provider: "openai",
   model: "gpt-4o-mini",
+  baseUrl: "https://proxyapi.ru",
 };
 
 const SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...) с встроенными CSS-стилями в теге <style>. Никакого объяснения, никакого markdown — только чистый HTML. Стиль: современный, красивый, тёмная тема, адаптивный.`;
@@ -62,7 +64,8 @@ export default function LumenApp() {
       let html = "";
 
       if (settings.provider === "openai") {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        const base = (settings.baseUrl || "https://proxyapi.ru").replace(/\/$/, "");
+        const res = await fetch(`${base}/v1/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
