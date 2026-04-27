@@ -23,6 +23,7 @@ interface Settings {
   provider: "openai" | "claude";
   model: string;
   baseUrl: string;
+  proxyUrl: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -30,6 +31,7 @@ const DEFAULT_SETTINGS: Settings = {
   provider: "openai",
   model: "gpt-4o-mini",
   baseUrl: import.meta.env.VITE_DEFAULT_OPENAI_BASE || "https://proxyapi.ru",
+  proxyUrl: import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba",
 };
 
 const EDIT_SYSTEM_PROMPT = (currentHtml: string) =>
@@ -44,7 +46,7 @@ ${currentHtml}
 
 const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...) с встроенными CSS-стилями в теге <style>. Никакого объяснения, никакого markdown — только чистый HTML. Стиль: современный, красивый, тёмная тема, адаптивный.`;
 
-const PROXY_URL = import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
+
 
 let msgCounter = 0;
 
@@ -109,9 +111,11 @@ export default function LumenApp() {
           messages: [{ role: "user", content: userText }],
         };
 
+    const proxyUrl = (settings.proxyUrl || "").trim() || (import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba");
+
     let res: Response;
     try {
-      res = await fetch(PROXY_URL, {
+      res = await fetch(proxyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),

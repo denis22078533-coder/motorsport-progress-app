@@ -8,6 +8,7 @@ interface AISettings {
   provider: "openai" | "claude";
   model: string;
   baseUrl: string;
+  proxyUrl: string;
 }
 
 interface Props {
@@ -166,15 +167,28 @@ export default function SettingsDrawer({ open, onClose, settings, onSave, ghSett
 
                   {/* Base URL */}
                   <div>
-                    <label className="text-white/40 text-xs font-medium uppercase tracking-wider block mb-2">Base URL (Адрес прокси)</label>
+                    <label className="text-white/40 text-xs font-medium uppercase tracking-wider block mb-2">Base URL (Адрес провайдера)</label>
                     <input
                       type="text"
                       value={form.baseUrl}
                       onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value.trim() }))}
-                      placeholder={form.provider === "openai" ? "proxyapi.ru" : "https://api.anthropic.com"}
+                      placeholder={form.provider === "openai" ? "https://proxyapi.ru" : "https://api.anthropic.com"}
                       className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-[#9333ea]/40 transition-colors"
                     />
-                    <p className="text-white/20 text-xs mt-1.5">Для ProxyAPI: proxyapi.ru</p>
+                    <p className="text-white/20 text-xs mt-1.5">Для ProxyAPI: https://proxyapi.ru</p>
+                  </div>
+
+                  {/* Proxy URL */}
+                  <div>
+                    <label className="text-white/40 text-xs font-medium uppercase tracking-wider block mb-2">Proxy URL (Адрес функции-шлюза)</label>
+                    <input
+                      type="text"
+                      value={form.proxyUrl}
+                      onChange={e => setForm(f => ({ ...f, proxyUrl: e.target.value.trim() }))}
+                      placeholder="https://functions.poehali.dev/..."
+                      className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-[#9333ea]/40 transition-colors"
+                    />
+                    <p className="text-white/20 text-xs mt-1.5">URL cloud-функции, через которую идут запросы к ИИ.</p>
                   </div>
 
                   <div className="bg-[#9333ea]/5 border border-[#9333ea]/15 rounded-xl p-3.5">
