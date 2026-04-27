@@ -275,7 +275,7 @@ export default function LumenApp() {
     setCycleLabel("");
     setDeployingId(null);
     setDeployResult({ id: msgId, ...result });
-    setTimeout(() => setDeployResult(null), 6000);
+    setTimeout(() => setDeployResult(null), result.ok ? 6000 : 30000);
   }, [ghSettings, pushToGitHub, fetchFromGitHub, currentFileSha, currentFilePath]);
 
   const handleStop = () => {
