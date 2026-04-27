@@ -16,6 +16,9 @@ interface Props {
   deployResult: { id: number; ok: boolean; message: string } | null;
   liveUrl: string;
   onOpenPreview?: () => void;
+  onLoadFromGitHub?: () => void;
+  loadingFromGitHub?: boolean;
+  currentFilePath?: string;
 }
 
 const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
@@ -33,6 +36,7 @@ const SUGGESTIONS = [
 export default function ChatPanel({
   status, cycleLabel, messages, onSend, onStop, onApply,
   deployingId, deployResult, liveUrl, onOpenPreview,
+  onLoadFromGitHub, loadingFromGitHub, currentFilePath,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
@@ -89,7 +93,42 @@ export default function ChatPanel({
           {/* Suggestions — empty state */}
           {messages.length === 0 && !isActive && (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-2 mt-2">
-              <p className="text-white/30 text-xs font-medium mb-1">Попробуйте:</p>
+
+              {/* Load from GitHub */}
+              {onLoadFromGitHub && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-3"
+                >
+                  <p className="text-white/30 text-xs font-medium mb-2">Редактировать существующий сайт:</p>
+                  <button
+                    onClick={onLoadFromGitHub}
+                    disabled={loadingFromGitHub}
+                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border transition-all text-sm font-semibold ${
+                      loadingFromGitHub
+                        ? "bg-[#9333ea]/10 border-[#9333ea]/20 text-purple-400/50 cursor-wait"
+                        : "bg-[#9333ea]/10 border-[#9333ea]/30 hover:bg-[#9333ea]/20 hover:border-[#9333ea]/50 text-purple-300 hover:text-white"
+                    }`}
+                  >
+                    <Icon
+                      name={loadingFromGitHub ? "Loader" : "FolderOpen"}
+                      size={15}
+                      className={loadingFromGitHub ? "animate-spin text-purple-400" : "text-[#9333ea]"}
+                    />
+                    <div className="text-left">
+                      <div className="text-xs font-semibold leading-tight">
+                        {loadingFromGitHub ? "Загружаю с GitHub..." : "Загрузить мой сайт"}
+                      </div>
+                      {currentFilePath && !loadingFromGitHub && (
+                        <div className="text-[10px] text-white/30 font-mono font-normal mt-0.5">{currentFilePath}</div>
+                      )}
+                    </div>
+                  </button>
+                </motion.div>
+              )}
+
+              <p className="text-white/30 text-xs font-medium mb-1">Или создать новый:</p>
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s}

@@ -106,6 +106,7 @@ export default function LumenApp() {
   const [deployResult, setDeployResult] = useState<{ id: number; ok: boolean; message: string } | null>(null);
   const [currentFileSha, setCurrentFileSha] = useState<string>("");
   const [currentFilePath, setCurrentFilePath] = useState<string>("");
+  const [loadingFromGitHub, setLoadingFromGitHub] = useState(false);
 
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -283,6 +284,32 @@ export default function LumenApp() {
     setCycleLabel("");
   };
 
+  const handleLoadFromGitHub = useCallback(async () => {
+    if (!ghSettings.token || !ghSettings.repo) { setSettingsOpen(true); return; }
+    setLoadingFromGitHub(true);
+    const fetched = await fetchFromGitHub();
+    setLoadingFromGitHub(false);
+    if (fetched.ok && fetched.html) {
+      setCurrentFileSha(fetched.sha);
+      setCurrentFilePath(fetched.filePath);
+      setPreviewHtml(fetched.html);
+      setMobileTab("preview");
+      const id = ++msgCounter;
+      setMessages([{
+        id,
+        role: "assistant",
+        text: `Загружен файл «${fetched.filePath}». Вижу ваш сайт. Опишите, что нужно изменить — внесу правки бережно.`,
+      }]);
+    } else {
+      const id = ++msgCounter;
+      setMessages([{
+        id,
+        role: "assistant",
+        text: `Не удалось загрузить файл: ${fetched.message || "неизвестная ошибка"}. Проверьте настройки GitHub.`,
+      }]);
+    }
+  }, [ghSettings, fetchFromGitHub]);
+
   const handleNewProject = () => {
     setMessages([]);
     setPreviewHtml(null);
@@ -375,6 +402,9 @@ export default function LumenApp() {
                 deployResult={deployResult}
                 liveUrl={liveUrl}
                 onOpenPreview={() => setMobileTab("preview")}
+                onLoadFromGitHub={ghSettings.token && ghSettings.repo ? handleLoadFromGitHub : undefined}
+                loadingFromGitHub={loadingFromGitHub}
+                currentFilePath={ghSettings.filePath || "index.html"}
               />
             </div>
 
