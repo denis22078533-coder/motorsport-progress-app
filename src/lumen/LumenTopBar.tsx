@@ -5,7 +5,7 @@ interface Props {
   status: "idle" | "generating" | "done" | "error";
   cycleLabel?: string;
   onNewProject: () => void;
-  onExport: () => void;
+  onResetTheme: () => void;
   onSettings: () => void;
   onLogout: () => void;
 }
@@ -17,7 +17,7 @@ const STATUS_MAP = {
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, onNewProject, onResetTheme, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -25,7 +25,11 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="h-11 flex items-center justify-between px-3 border-b border-[#9333ea]/20 bg-[#07070c]/90 backdrop-blur-xl z-50 shrink-0 min-w-0"
+      className="h-11 flex items-center justify-between px-3 border-b backdrop-blur-xl z-50 shrink-0 min-w-0"
+      style={{
+        background: "var(--lumen-panel, rgba(7,7,12,0.9))",
+        borderColor: "var(--lumen-border, rgba(147,51,234,0.2))",
+      }}
     >
       {/* Left — Logo + status */}
       <div className="flex items-center gap-2 min-w-0 overflow-hidden">
@@ -52,20 +56,27 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport
       <div className="flex items-center gap-1.5 shrink-0">
         <motion.button
           whileTap={{ scale: 0.97 }}
-          onClick={onExport}
-          className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white text-xs font-medium transition-colors"
+          onClick={onResetTheme}
+          title="Сбросить тему"
+          className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border text-xs font-medium transition-colors"
+          style={{
+            borderColor: "var(--lumen-border, rgba(255,255,255,0.1))",
+            background: "var(--lumen-panel, rgba(255,255,255,0.04))",
+            color: "var(--lumen-textMuted, rgba(255,255,255,0.7))",
+          }}
         >
-          <Icon name="Download" size={12} />
-          Скачать
+          <Icon name="RotateCcw" size={12} />
+          Сброс
         </motion.button>
 
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onNewProject}
-          className="flex items-center gap-1 h-7 px-2.5 rounded-md bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-colors"
+          className="flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-semibold transition-colors"
+          style={{ background: "var(--lumen-accent, #9333ea)", color: "var(--lumen-text, #fff)" }}
         >
           <Icon name="Plus" size={13} />
-          <span className="hidden sm:inline">Новый</span>
+          <span className="hidden sm:inline">Очистить</span>
         </motion.button>
 
         <button

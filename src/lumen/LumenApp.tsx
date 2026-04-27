@@ -1,7 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import LumenTopBar from "./LumenTopBar";
-import LivePreview from "./LivePreview";
 import ChatPanel from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
 import LumenLoginPage from "./LumenLoginPage";
@@ -9,7 +8,6 @@ import { useLumenAuth } from "./useLumenAuth";
 import { useGitHub } from "./useGitHub";
 
 type CycleStatus = "idle" | "reading" | "generating" | "done" | "error";
-type MobileTab = "chat" | "preview";
 
 export interface Message {
   id: number;
@@ -35,53 +33,33 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 
-const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ без единого слова объяснений и без markdown-блоков.
+const THEME_SYSTEM_PROMPT = (currentTheme: Record<string, string>) =>
+  `Ты — стилист интерфейса Lumen. Пользователь описывает желаемое изменение внешнего вида самого приложения Lumen (фон, цвет акцента, цвет текста, кнопок и т.д.).
 
-ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА — нарушение недопустимо:
+Твоя задача — вернуть СТРОГО валидный JSON без единого слова объяснений и без markdown-блоков.
 
-1. СТРУКТУРА ДОКУМЕНТА:
-   - Начинай строго с <!DOCTYPE html>, заканчивай </html>
-   - Все пути к ресурсам — ТОЛЬКО относительные: assets/... (без ведущего слэша)
-   - Кодировка: <meta charset="UTF-8">
-   - Viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+Формат ответа:
+{
+  "bg": "#0a0a0f",
+  "panel": "#111118",
+  "accent": "#9333ea",
+  "accentHover": "#7e22ce",
+  "text": "#ffffff",
+  "textMuted": "rgba(255,255,255,0.6)",
+  "border": "rgba(255,255,255,0.08)",
+  "comment": "Короткое описание того, что изменилось (1 фраза по-русски)"
+}
 
-2. TAILWIND CSS — подключай ВСЕГДА первым в <head>:
-   <script src="https://cdn.tailwindcss.com"></script>
-   После него конфигурируй через <script>tailwind.config = { ... }</script> если нужны кастомные цвета.
+ПРАВИЛА:
+1. Все цвета — валидные CSS: HEX (#rrggbb), rgb(), rgba(), либо CSS-имена.
+2. Меняй ТОЛЬКО то, что просит пользователь. Остальные поля — оставь как в текущей теме.
+3. Контраст обязателен: текст должен быть читаемым на фоне.
+4. Если просят "светлую тему" — bg светлый, text тёмный. Если "тёмную" — наоборот.
+5. accent и accentHover должны отличаться (hover темнее или насыщеннее).
+6. comment — короткая фраза, что именно изменилось.
 
-3. LUCIDE ICONS — подключай ВСЕГДА:
-   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-   Использование иконок: <i data-lucide="имя-иконки"></i>
-   В конце <body> вызывай: <script>lucide.createIcons();</script>
-
-4. ДИЗАЙН — строго тёмный glassmorphism:
-   - Фон: тёмный градиент (slate-900, gray-950, black)
-   - Карточки: backdrop-blur-xl, bg-white/5, border border-white/10, rounded-2xl
-   - Текст: белый/серый (text-white, text-gray-300, text-gray-400)
-   - Акценты: фиолетовый/индиго/циан (violet-500, indigo-400, cyan-400)
-   - Кнопки: градиентные bg-gradient-to-r, с hover-эффектами и transition
-   - Тени: shadow-2xl, drop-shadow с цветными glow-эффектами
-
-5. НИКАКИХ внешних изображений (img src с http). Только SVG-иконки через Lucide или CSS-фигуры.
-
-6. Адаптивность обязательна (mobile-first через Tailwind breakpoints).`;
-
-const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
-  `Ты — хирургический редактор HTML. Твоя задача — внести ТОЛЬКО запрошенное изменение, сохранив весь остальной код в первозданном виде.
-
-ЖЁСТКИЕ ПРАВИЛА — нарушение недопустимо:
-
-1. Верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...), без объяснений, без markdown.
-2. ЗАПРЕЩЕНО удалять, переименовывать или переписывать любые классы, стили, анимации, цвета, шрифты, отступы — если пользователь об этом не просил.
-3. ЗАПРЕЩЕНО менять подключённые CDN (Tailwind, Lucide, шрифты, скрипты) — они должны остаться точно такими же.
-4. ЗАПРЕЩЕНО изменять структуру секций, порядок блоков, атрибуты id/class — если пользователь об этом не просил.
-5. Меняй строго и только то, что описано в запросе пользователя. Всё остальное — скопируй без изменения символа.
-6. Все пути к ресурсам — относительные (assets/..., без ведущего слэша).
-7. Если запрос неоднозначен — делай минимальное изменение, а не максимальное.
-
---- ТЕКУЩИЙ КОД САЙТА (сохрани его полностью, правь только нужное) ---
-${currentHtml}
---- КОНЕЦ КОДА ---`;
+ТЕКУЩАЯ ТЕМА:
+${JSON.stringify(currentTheme, null, 2)}`;
 
 
 
@@ -89,24 +67,13 @@ let msgCounter = 0;
 
 export default function LumenApp() {
   const { authed, login, logout } = useLumenAuth();
-  const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub } = useGitHub();
-
-  const liveUrl = (() => {
-    const [user, repo] = (ghSettings.repo || "").split("/");
-    return user && repo ? `https://${user}.github.io/${repo}/` : "";
-  })();
+  const { ghSettings, saveGhSettings } = useGitHub();
 
   const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
-  const [deployingId, setDeployingId] = useState<number | null>(null);
   const [deployResult, setDeployResult] = useState<{ id: number; ok: boolean; message: string } | null>(null);
-  const [currentFileSha, setCurrentFileSha] = useState<string>("");
-  const [currentFilePath, setCurrentFilePath] = useState<string>("");
-  const [loadingFromGitHub, setLoadingFromGitHub] = useState(false);
 
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -115,14 +82,32 @@ export default function LumenApp() {
     } catch { return DEFAULT_SETTINGS; }
   });
 
-  const abortRef = useRef(false);
-
-  const extractHtml = (raw: string): string => {
-    const mdMatch = raw.match(/```html\s*\n([\s\S]*?)```/i) || raw.match(/```\s*\n([\s\S]*?)```/);
-    if (mdMatch) raw = mdMatch[1].trim();
-    const tagMatch = raw.match(/(<!DOCTYPE[\s\S]*)/i) || raw.match(/(<html[\s\S]*)/i);
-    return tagMatch ? tagMatch[1].trim() : raw.trim();
+  const DEFAULT_THEME: Record<string, string> = {
+    bg: "#0a0a0f",
+    panel: "#111118",
+    accent: "#9333ea",
+    accentHover: "#7e22ce",
+    text: "#ffffff",
+    textMuted: "rgba(255,255,255,0.6)",
+    border: "rgba(255,255,255,0.08)",
   };
+
+  const [theme, setTheme] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("lumen_theme");
+      return saved ? { ...DEFAULT_THEME, ...JSON.parse(saved) } : DEFAULT_THEME;
+    } catch { return DEFAULT_THEME; }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    Object.entries(theme).forEach(([k, v]) => {
+      root.style.setProperty(`--lumen-${k}`, v);
+    });
+    try { localStorage.setItem("lumen_theme", JSON.stringify(theme)); } catch (_e) { /* ignore */ }
+  }, [theme]);
+
+  const abortRef = useRef(false);
 
   const callAI = async (systemPrompt: string, userText: string): Promise<string> => {
     const rawBase = (settings.baseUrl || "").trim().replace(/\/+$/, "");
@@ -183,6 +168,15 @@ export default function LumenApp() {
     }
   };
 
+  const extractJson = (raw: string): Record<string, string> => {
+    const md = raw.match(/```json\s*\n([\s\S]*?)```/i) || raw.match(/```\s*\n([\s\S]*?)```/);
+    const txt = md ? md[1].trim() : raw.trim();
+    const start = txt.indexOf("{");
+    const end = txt.lastIndexOf("}");
+    if (start === -1 || end === -1) throw new Error("Модель не вернула JSON");
+    return JSON.parse(txt.slice(start, end + 1));
+  };
+
   const handleSend = useCallback(async (text: string) => {
     if (!settings.apiKey) { setSettingsOpen(true); return; }
     abortRef.current = false;
@@ -192,75 +186,29 @@ export default function LumenApp() {
     setDeployResult(null);
 
     try {
-      // ── Шаг 1: читаем текущий код из GitHub ──────────────────────────────
-      let currentHtml = "";
-      let systemPrompt = CREATE_SYSTEM_PROMPT;
-
-      if (ghSettings.token && ghSettings.repo) {
-        setCycleStatus("reading");
-        const filePath = (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
-        setCycleLabel(`Читаю ${filePath} из GitHub...`);
-        const fetched = await fetchFromGitHub();
-        if (fetched.ok && fetched.html) {
-          currentHtml = fetched.html;
-          setCurrentFileSha(fetched.sha);
-          setCurrentFilePath(fetched.filePath);
-          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml);
-        }
-      }
-
-      if (abortRef.current) return;
-
-      // ── Шаг 2: генерируем правки ──────────────────────────────────────────
       setCycleStatus("generating");
-      setCycleLabel("Генерирую правки...");
+      setCycleLabel("Подбираю стиль для Lumen...");
 
-      const rawResponse = await callAI(systemPrompt, text);
-      const cleanHtml = extractHtml(rawResponse);
-
-      if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
-        throw new Error(`Модель вернула не HTML: "${cleanHtml.slice(0, 200)}". Попробуйте ещё раз.`);
-      }
+      const rawResponse = await callAI(THEME_SYSTEM_PROMPT(theme), text);
 
       if (abortRef.current) return;
 
-      setPreviewHtml(cleanHtml);
-      setMobileTab("preview");
+      const parsed = extractJson(rawResponse);
+      const comment = (parsed.comment || "").toString();
+      const newTheme = { ...theme };
+      ["bg", "panel", "accent", "accentHover", "text", "textMuted", "border"].forEach((k) => {
+        if (parsed[k] && typeof parsed[k] === "string") newTheme[k] = parsed[k];
+      });
 
-      const assistantId = ++msgCounter;
+      setTheme(newTheme);
+      setCycleStatus("done");
+      setCycleLabel("");
+
       setMessages(prev => [...prev, {
-        id: assistantId,
+        id: ++msgCounter,
         role: "assistant",
-        text: currentHtml
-          ? "Готово! Правки внесены. Загружаю в GitHub..."
-          : "Готово! Сайт создан. Загружаю в GitHub...",
-        html: cleanHtml,
+        text: comment ? `Готово! ${comment}` : "Готово! Стиль Lumen обновлён.",
       }]);
-
-      // ── Шаг 3: автодеплой в GitHub ───────────────────────────────────────
-      if (ghSettings.token && ghSettings.repo) {
-        setCycleLabel("Загружаю в GitHub...");
-        const filePath = currentFilePath || (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
-        const pushResult = await pushToGitHub(cleanHtml, "", filePath);
-
-        if (pushResult.ok) {
-          try {
-            const fresh = await fetchFromGitHub();
-            if (fresh.ok) {
-              setCurrentFileSha(fresh.sha);
-              setCurrentFilePath(fresh.filePath);
-            }
-          } catch (_e) { /* не критично */ }
-        }
-
-        setCycleStatus(pushResult.ok ? "done" : "error");
-        setCycleLabel("");
-        setDeployResult({ id: assistantId, ...pushResult });
-        setTimeout(() => setDeployResult(null), pushResult.ok ? 8000 : 30000);
-      } else {
-        setCycleStatus("done");
-        setCycleLabel("");
-      }
 
     } catch (err) {
       if (!abortRef.current) {
@@ -270,36 +218,7 @@ export default function LumenApp() {
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath]);
-
-  const handleApply = useCallback(async (msgId: number, html: string) => {
-    if (!ghSettings.token) { setSettingsOpen(true); return; }
-    setDeployingId(msgId);
-    setDeployResult(null);
-
-    const filePath = currentFilePath || (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
-    setCycleStatus("generating");
-    setCycleLabel(`Сохраняю ${filePath} в GitHub...`);
-
-    const result = await pushToGitHub(html, currentFileSha, filePath);
-
-    if (result.ok) {
-      // Обновляем sha после успешного пуша
-      try {
-        const fresh = await fetchFromGitHub();
-        if (fresh.ok) {
-          setCurrentFileSha(fresh.sha);
-          setCurrentFilePath(fresh.filePath);
-        }
-      } catch (_e) { /* не критично */ }
-    }
-
-    setCycleStatus(result.ok ? "done" : "error");
-    setCycleLabel("");
-    setDeployingId(null);
-    setDeployResult({ id: msgId, ...result });
-    setTimeout(() => setDeployResult(null), result.ok ? 6000 : 30000);
-  }, [ghSettings, pushToGitHub, fetchFromGitHub, currentFileSha, currentFilePath]);
+  }, [settings, theme]);
 
   const handleStop = () => {
     abortRef.current = true;
@@ -307,48 +226,16 @@ export default function LumenApp() {
     setCycleLabel("");
   };
 
-  const handleLoadFromGitHub = useCallback(async () => {
-    if (!ghSettings.token || !ghSettings.repo) { setSettingsOpen(true); return; }
-    setLoadingFromGitHub(true);
-    const fetched = await fetchFromGitHub();
-    setLoadingFromGitHub(false);
-    if (fetched.ok && fetched.html) {
-      setCurrentFileSha(fetched.sha);
-      setCurrentFilePath(fetched.filePath);
-      setPreviewHtml(fetched.html);
-      setMobileTab("preview");
-      const id = ++msgCounter;
-      setMessages([{
-        id,
-        role: "assistant",
-        text: `Загружен файл «${fetched.filePath}». Вижу ваш сайт. Опишите, что нужно изменить — внесу правки бережно.`,
-      }]);
-    } else {
-      const id = ++msgCounter;
-      setMessages([{
-        id,
-        role: "assistant",
-        text: `Не удалось загрузить файл: ${fetched.message || "неизвестная ошибка"}. Проверьте настройки GitHub.`,
-      }]);
-    }
-  }, [ghSettings, fetchFromGitHub]);
-
   const handleNewProject = () => {
     setMessages([]);
-    setPreviewHtml(null);
     setCycleStatus("idle");
     setCycleLabel("");
-    setMobileTab("chat");
     setDeployResult(null);
   };
 
-  const handleExport = () => {
-    if (!previewHtml) return;
-    const blob = new Blob([previewHtml], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "lumen-site.html"; a.click();
-    URL.revokeObjectURL(url);
+  const handleResetTheme = () => {
+    setTheme(DEFAULT_THEME);
+    setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Тема сброшена к стандартной." }]);
   };
 
   const handleSaveSettings = (s: Settings) => {
@@ -372,68 +259,28 @@ export default function LumenApp() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="h-dvh flex flex-col bg-[#07070c] overflow-hidden"
-          style={{ maxWidth: "100vw" }}
+          className="h-dvh flex flex-col overflow-hidden"
+          style={{ maxWidth: "100vw", background: "var(--lumen-bg, #07070c)" }}
         >
           <LumenTopBar
             status={topStatus}
             cycleLabel={cycleLabel}
             onNewProject={handleNewProject}
-            onExport={handleExport}
+            onResetTheme={handleResetTheme}
             onSettings={() => setSettingsOpen(true)}
             onLogout={logout}
           />
 
-          {/* File context banner */}
-          {currentFilePath && (
-            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-[#9333ea]/20 text-xs">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-white/40">Редактируется:</span>
-              <span className="text-emerald-400 font-mono font-medium">{currentFilePath}</span>
-              <span className="text-white/20 ml-auto font-mono">{ghSettings.repo}</span>
-            </div>
-          )}
-
-          {/* Mobile tab switcher */}
-          <div className="md:hidden flex shrink-0 border-b border-white/[0.06] bg-[#0a0a0f]">
-            {(["chat", "preview"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setMobileTab(tab)}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                  mobileTab === tab
-                    ? "text-[#9333ea] border-b-2 border-[#9333ea]"
-                    : "text-white/40 border-b-2 border-transparent"
-                }`}
-              >
-                {tab === "chat" ? <><span>💬</span> Чат</> : <><span>🖥️</span> Сайт</>}
-              </button>
-            ))}
-          </div>
-
-          {/* Main content */}
-          <div className="flex-1 min-h-0 overflow-hidden md:flex md:gap-2 md:p-2">
-            <div className={`flex flex-col h-full md:w-[420px] md:flex-none ${mobileTab === "chat" ? "flex" : "hidden md:flex"}`}>
-              <ChatPanel
-                status={cycleStatus}
-                cycleLabel={cycleLabel}
-                messages={messages}
-                onSend={handleSend}
-                onStop={handleStop}
-                onApply={handleApply}
-                deployingId={deployingId}
-                deployResult={deployResult}
-                liveUrl={liveUrl}
-                onOpenPreview={() => setMobileTab("preview")}
-                onLoadFromGitHub={handleLoadFromGitHub}
-                loadingFromGitHub={loadingFromGitHub}
-                currentFilePath={ghSettings.filePath || "index.html"}
-              />
-            </div>
-
-            <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
-              <LivePreview status={topStatus} previewHtml={previewHtml} />
-            </div>
+          {/* Main content — only chat */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ChatPanel
+              status={cycleStatus}
+              cycleLabel={cycleLabel}
+              messages={messages}
+              onSend={handleSend}
+              onStop={handleStop}
+              deployResult={deployResult}
+            />
           </div>
 
           <SettingsDrawer

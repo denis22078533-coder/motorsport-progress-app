@@ -11,14 +11,10 @@ interface Props {
   messages: Message[];
   onSend: (text: string) => void;
   onStop: () => void;
-  onApply: (msgId: number, html: string) => Promise<void>;
-  deployingId: number | null;
-  deployResult: { id: number; ok: boolean; message: string } | null;
-  liveUrl: string;
-  onOpenPreview?: () => void;
-  onLoadFromGitHub?: () => void;
-  loadingFromGitHub?: boolean;
-  currentFilePath?: string;
+  onApply?: (msgId: number, html: string) => Promise<void>;
+  deployingId?: number | null;
+  deployResult?: { id: number; ok: boolean; message: string } | null;
+  liveUrl?: string;
 }
 
 const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
@@ -27,16 +23,14 @@ const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
 ];
 
 const SUGGESTIONS = [
-  "Лендинг для фитнес-клуба с тарифами",
-  "Портфолио дизайнера с галереей работ",
-  "Сайт кофейни с меню и адресом",
-  "Интернет-магазин одежды с каталогом",
+  "Сделай фон белым",
+  "Поменяй акцент на изумрудный",
+  "Тёмно-синяя тема с золотым акцентом",
+  "Минималистичный светлый стиль",
 ];
 
 export default function ChatPanel({
-  status, cycleLabel, messages, onSend, onStop, onApply,
-  deployingId, deployResult, liveUrl, onOpenPreview,
-  onLoadFromGitHub, loadingFromGitHub, currentFilePath,
+  status, cycleLabel, messages, onSend, onStop, deployResult, liveUrl,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
@@ -77,13 +71,20 @@ export default function ChatPanel({
 
   return (
     <div
-      className="w-full h-full flex flex-col bg-[#0a0a0f] overflow-hidden"
-      style={{ paddingBottom: kbOffset > 0 ? kbOffset : undefined }}
+      className="w-full h-full flex flex-col overflow-hidden"
+      style={{
+        background: "var(--lumen-bg, #0a0a0f)",
+        color: "var(--lumen-text, #fff)",
+        paddingBottom: kbOffset > 0 ? kbOffset : undefined,
+      }}
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
-        <div className="w-1.5 h-1.5 rounded-full bg-[#9333ea]" />
-        <span className="text-white/60 text-xs font-medium tracking-wide uppercase">Командный центр</span>
+      <div
+        className="px-4 py-3 border-b flex items-center gap-2 shrink-0"
+        style={{ borderColor: "var(--lumen-border, rgba(255,255,255,0.06))" }}
+      >
+        <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--lumen-accent, #9333ea)" }} />
+        <span className="text-xs font-medium tracking-wide uppercase" style={{ color: "var(--lumen-textMuted, rgba(255,255,255,0.6))" }}>Командный центр</span>
       </div>
 
       {/* Messages */}
@@ -94,7 +95,7 @@ export default function ChatPanel({
           {messages.length === 0 && !isActive && (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-2 mt-2">
 
-              <p className="text-white/30 text-xs font-medium mb-1">Или создать новый:</p>
+              <p className="text-xs font-medium mb-1" style={{ color: "var(--lumen-textMuted, rgba(255,255,255,0.3))" }}>Измени стиль Lumen:</p>
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s}
@@ -119,11 +120,20 @@ export default function ChatPanel({
               transition={{ duration: 0.25 }}
               className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
-              <div className={`max-w-[90%] px-3 py-2.5 rounded-xl text-xs leading-relaxed ${
-                msg.role === "user"
-                  ? "bg-[#9333ea]/80 text-white rounded-tr-sm"
-                  : "bg-white/[0.05] border border-white/[0.08] text-white/70 rounded-tl-sm"
-              }`}>
+              <div
+                className={`max-w-[90%] px-3 py-2.5 rounded-xl text-xs leading-relaxed ${
+                  msg.role === "user" ? "rounded-tr-sm" : "border rounded-tl-sm"
+                }`}
+                style={
+                  msg.role === "user"
+                    ? { background: "var(--lumen-accent, #9333ea)", color: "var(--lumen-text, #fff)" }
+                    : {
+                        background: "var(--lumen-panel, rgba(255,255,255,0.05))",
+                        borderColor: "var(--lumen-border, rgba(255,255,255,0.08))",
+                        color: "var(--lumen-text, rgba(255,255,255,0.85))",
+                      }
+                }
+              >
                 {msg.text}
               </div>
 
@@ -214,62 +224,29 @@ export default function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      {/* View preview — mobile */}
-      {onOpenPreview && messages.length > 0 && (
-        <div className="px-3 pb-1 shrink-0 md:hidden">
-          <button
-            onClick={onOpenPreview}
-            className="w-full h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-          >
-            <Icon name="ExternalLink" size={13} />
-            Посмотреть результат
-          </button>
-        </div>
-      )}
-
-      {/* Load from GitHub — always visible */}
-      {onLoadFromGitHub && (
-        <div className="px-3 pb-1 shrink-0">
-          <button
-            onClick={onLoadFromGitHub}
-            disabled={loadingFromGitHub}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all ${
-              loadingFromGitHub
-                ? "bg-[#9333ea]/10 border-[#9333ea]/20 text-purple-400/50 cursor-wait"
-                : "bg-[#9333ea]/10 border-[#9333ea]/30 hover:bg-[#9333ea]/20 hover:border-[#9333ea]/50 text-purple-300 hover:text-white"
-            }`}
-          >
-            <Icon
-              name={loadingFromGitHub ? "Loader" : "FolderOpen"}
-              size={14}
-              className={loadingFromGitHub ? "animate-spin text-purple-400" : "text-[#9333ea]"}
-            />
-            <div className="text-left">
-              <div className="text-xs font-semibold leading-tight">
-                {loadingFromGitHub ? "Загружаю с GitHub..." : "Загрузить мой сайт"}
-              </div>
-              {currentFilePath && !loadingFromGitHub && (
-                <div className="text-[10px] text-white/30 font-mono font-normal mt-0.5">{currentFilePath}</div>
-              )}
-            </div>
-          </button>
-        </div>
-      )}
-
       {/* Input */}
-      <div className="px-3 pb-3 pt-2 border-t border-white/[0.06] shrink-0">
+      <div
+        className="px-3 pb-3 pt-2 border-t shrink-0"
+        style={{ borderColor: "var(--lumen-border, rgba(255,255,255,0.06))" }}
+      >
         <div className="flex flex-col gap-2">
-          <div className="flex items-end gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-[#9333ea]/40 transition-colors">
+          <div
+            className="flex items-end gap-2 border rounded-xl px-3 py-2.5 transition-colors"
+            style={{
+              background: "var(--lumen-panel, rgba(255,255,255,0.04))",
+              borderColor: "var(--lumen-border, rgba(255,255,255,0.08))",
+            }}
+          >
             <textarea
               ref={textareaRef}
               value={value}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               disabled={isActive}
-              placeholder={isActive ? "Обрабатываю..." : "Напишите команду, например: «Сделай фон белым»..."}
+              placeholder={isActive ? "Обрабатываю..." : "Например: «сделай фон белым», «акцент зелёный»…"}
               rows={1}
-              className="flex-1 bg-transparent text-white/80 placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[120px]"
-              style={{ fontSize: "16px" }}
+              className="flex-1 bg-transparent resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[120px]"
+              style={{ fontSize: "16px", color: "var(--lumen-text, rgba(255,255,255,0.85))" }}
             />
           </div>
 
@@ -296,10 +273,15 @@ export default function ChatPanel({
                 whileTap={{ scale: 0.97 }}
                 onClick={handleSend}
                 disabled={!value.trim()}
-                className="w-full h-9 rounded-xl bg-[#9333ea] hover:bg-[#7e22ce] disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-[0_0_16px_#9333ea30]"
+                className="w-full h-9 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                style={{
+                  background: "var(--lumen-accent, #9333ea)",
+                  color: "var(--lumen-text, #fff)",
+                  boxShadow: "0 0 16px var(--lumen-accent, #9333ea)30",
+                }}
               >
                 <Icon name="Send" size={14} />
-                Отправить команду
+                Изменить стиль Lumen
               </motion.button>
             )}
           </AnimatePresence>
