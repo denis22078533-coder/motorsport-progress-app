@@ -253,6 +253,21 @@ export default function SettingsDrawer({ open, onClose, settings, onSave, ghSett
                     <p className="text-white/20 text-xs mt-1.5">Формат: <span className="font-mono">username/repo</span></p>
                   </div>
 
+                  {/* File Path */}
+                  <div>
+                    <label className="text-white/40 text-xs font-medium uppercase tracking-wider block mb-2">
+                      Файл для редактирования
+                    </label>
+                    <input
+                      type="text"
+                      value={ghForm.filePath ?? "index.html"}
+                      onChange={e => setGhForm(f => ({ ...f, filePath: e.target.value.trim() }))}
+                      placeholder="index.html"
+                      className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-[#9333ea]/40 transition-colors"
+                    />
+                    <p className="text-white/20 text-xs mt-1.5">Путь внутри репозитория: <span className="font-mono">index.html</span> или <span className="font-mono">pages/about.html</span></p>
+                  </div>
+
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3.5 flex flex-col gap-1.5">
                     <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">Как получить Token</p>
                     <p className="text-white/30 text-xs leading-relaxed">

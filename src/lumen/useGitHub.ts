@@ -5,11 +5,13 @@ const STORAGE_KEY = "lumen_github";
 export interface GitHubSettings {
   token: string;
   repo: string;
+  filePath: string;
 }
 
 const DEFAULT: GitHubSettings = {
   token: "",
   repo: "denis22078533-coder/Lumin-platform",
+  filePath: "index.html",
 };
 
 function load(): GitHubSettings {
@@ -17,6 +19,14 @@ function load(): GitHubSettings {
     const s = localStorage.getItem(STORAGE_KEY);
     return s ? { ...DEFAULT, ...JSON.parse(s) } : DEFAULT;
   } catch { return DEFAULT; }
+}
+
+export interface FetchResult {
+  ok: boolean;
+  html: string;
+  sha: string;
+  filePath: string;
+  message?: string;
 }
 
 export function useGitHub() {
@@ -27,50 +37,59 @@ export function useGitHub() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   }, []);
 
-  const fetchFromGitHub = useCallback(async (): Promise<{ ok: boolean; html: string; message?: string }> => {
-    const { token, repo } = ghSettings;
-    if (!token || !repo) return { ok: false, html: "", message: "Нет токена или репозитория" };
+  const fetchFromGitHub = useCallback(async (): Promise<FetchResult> => {
+    const { token, repo, filePath } = ghSettings;
+    const path = (filePath || "index.html").trim().replace(/^\//, "");
+    if (!token || !repo) return { ok: false, html: "", sha: "", filePath: path, message: "Нет токена или репозитория" };
 
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/index.html`;
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
     try {
       const res = await fetch(apiUrl, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
       });
-      if (!res.ok) return { ok: false, html: "", message: `GitHub вернул HTTP ${res.status}` };
+      if (!res.ok) return { ok: false, html: "", sha: "", filePath: path, message: `GitHub вернул HTTP ${res.status}` };
       const data = await res.json();
       const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
-      return { ok: true, html: decoded };
+      return { ok: true, html: decoded, sha: data.sha as string, filePath: path };
     } catch (e) {
-      return { ok: false, html: "", message: String(e) };
+      return { ok: false, html: "", sha: "", filePath: path, message: String(e) };
     }
   }, [ghSettings]);
 
-  const pushToGitHub = useCallback(async (html: string): Promise<{ ok: boolean; message: string }> => {
+  const pushToGitHub = useCallback(async (
+    html: string,
+    sha: string,
+    filePath: string
+  ): Promise<{ ok: boolean; message: string }> => {
     const { token, repo } = ghSettings;
     if (!token) return { ok: false, message: "Введите GitHub Personal Token в настройках" };
     if (!repo) return { ok: false, message: "Введите путь к репозиторию" };
 
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/index.html`;
+    const path = (filePath || "index.html").trim().replace(/^\//, "");
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
 
-    let sha: string | undefined;
-    try {
-      const getRes = await fetch(apiUrl, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-      });
-      if (getRes.ok) {
-        const data = await getRes.json();
-        sha = data.sha as string;
+    // Если sha не передан — получаем актуальный
+    let actualSha = sha;
+    if (!actualSha) {
+      try {
+        const getRes = await fetch(apiUrl, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+        });
+        if (getRes.ok) {
+          const data = await getRes.json();
+          actualSha = data.sha as string;
+        }
+      } catch (_e) {
+        // файл новый
       }
-    } catch (_e) {
-      // файл не существует — создадим новый
     }
 
     const content = btoa(unescape(encodeURIComponent(html)));
     const body: Record<string, string> = {
-      message: "Lumen: обновление сайта",
+      message: `Lumen: правки в ${path}`,
       content,
     };
-    if (sha) body.sha = sha;
+    if (actualSha) body.sha = actualSha;
 
     const putRes = await fetch(apiUrl, {
       method: "PUT",
@@ -83,7 +102,7 @@ export function useGitHub() {
     });
 
     if (putRes.ok) {
-      return { ok: true, message: "Сайт обновлён в GitHub!" };
+      return { ok: true, message: `Файл ${path} обновлён в GitHub!` };
     } else {
       const err: { message?: string } = await putRes.json().catch(() => ({}));
       return { ok: false, message: err.message || `Ошибка GitHub: HTTP ${putRes.status}` };
