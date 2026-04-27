@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 
 interface Props {
   status: "idle" | "generating" | "done" | "error";
+  cycleLabel?: string;
   onNewProject: () => void;
   onExport: () => void;
   onSettings: () => void;
@@ -10,13 +11,13 @@ interface Props {
 }
 
 const STATUS_MAP = {
-  idle: { label: "Готов", dot: "bg-zinc-500", text: "text-zinc-400" },
-  generating: { label: "Генерация...", dot: "bg-violet-400 animate-pulse", text: "text-violet-400" },
-  done: { label: "Готово", dot: "bg-emerald-400", text: "text-emerald-400" },
-  error: { label: "Ошибка", dot: "bg-red-500", text: "text-red-400" },
+  idle:       { dot: "bg-zinc-500",                  text: "text-zinc-400" },
+  generating: { dot: "bg-[#9333ea] animate-pulse",   text: "text-[#9333ea]" },
+  done:       { dot: "bg-emerald-400",               text: "text-emerald-400" },
+  error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, onNewProject, onExport, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -27,7 +28,7 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
       className="h-11 flex items-center justify-between px-3 border-b border-[#9333ea]/20 bg-[#07070c]/90 backdrop-blur-xl z-50 shrink-0 min-w-0"
     >
       {/* Left — Logo + status */}
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 shrink-0">
           <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shadow-[0_0_8px_#9333ea80]">
             <span className="text-white text-[10px] font-bold tracking-tight">L</span>
@@ -38,15 +39,17 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
 
         <div className="hidden sm:block w-px h-4 bg-white/10 shrink-0" />
 
-        <div className="hidden sm:flex items-center gap-1 shrink-0">
+        {/* Cycle status label */}
+        <div className="hidden sm:flex items-center gap-1.5 min-w-0 overflow-hidden">
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
-          <span className={`text-xs font-medium ${s.text}`}>{s.label}</span>
+          <span className={`text-xs font-medium truncate ${s.text}`}>
+            {cycleLabel || (status === "idle" ? "Готов" : status === "generating" ? "Обработка..." : status === "done" ? "Готово" : "Ошибка")}
+          </span>
         </div>
       </div>
 
       {/* Right — Actions */}
       <div className="flex items-center gap-1.5 shrink-0">
-        {/* Export — desktop only */}
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onExport}
@@ -56,7 +59,6 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
           Скачать
         </motion.button>
 
-        {/* New project */}
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onNewProject}
@@ -66,7 +68,6 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
           <span className="hidden sm:inline">Новый</span>
         </motion.button>
 
-        {/* Settings */}
         <button
           onClick={onSettings}
           className="w-7 h-7 rounded-md flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
@@ -74,7 +75,6 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
           <Icon name="Settings" size={14} />
         </button>
 
-        {/* Logout */}
         <button
           onClick={onLogout}
           title="Выйти"

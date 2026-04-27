@@ -1,77 +1,74 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Icon from "@/components/ui/icon";
+import { Message } from "./LumenApp";
 
-interface Message {
-  id: number;
-  role: "user" | "assistant";
-  text: string;
-}
+type CycleStatus = "idle" | "reading" | "generating" | "done" | "error";
 
 interface Props {
-  status: "idle" | "generating" | "done" | "error";
+  status: CycleStatus;
+  cycleLabel: string;
   messages: Message[];
   onSend: (text: string) => void;
   onStop: () => void;
+  onApply: (msgId: number, html: string) => Promise<void>;
+  deployingId: number | null;
+  deployResult: { id: number; ok: boolean; message: string } | null;
   onOpenPreview?: () => void;
 }
 
-const SUGGESTIONS = [
-  "Лендинг для фитнес-клуба",
-  "Портфолио дизайнера",
-  "Сайт кофейни с меню",
-  "Интернет-магазин одежды",
+const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
+  { key: "reading",    label: "Читаю текущий код...",    icon: "Download"  },
+  { key: "generating", label: "Генерирую правки...",      icon: "Sparkles"  },
 ];
 
-export default function ChatPanel({ status, messages, onSend, onStop, onOpenPreview }: Props) {
+const SUGGESTIONS = [
+  "Лендинг для фитнес-клуба с тарифами",
+  "Портфолио дизайнера с галереей работ",
+  "Сайт кофейни с меню и адресом",
+  "Интернет-магазин одежды с каталогом",
+];
+
+export default function ChatPanel({
+  status, cycleLabel, messages, onSend, onStop, onApply,
+  deployingId, deployResult, onOpenPreview,
+}: Props) {
   const [value, setValue] = useState("");
-  const [listening, setListening] = useState(false);
   const [kbOffset, setKbOffset] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Visual Viewport API — поднимаем инпут над клавиатурой на iOS Safari
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const onResize = () => {
-      const offset = window.innerHeight - vv.height - vv.offsetTop;
-      setKbOffset(Math.max(0, offset));
-    };
+    const onResize = () => setKbOffset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
     vv.addEventListener("resize", onResize);
     vv.addEventListener("scroll", onResize);
-    return () => {
-      vv.removeEventListener("resize", onResize);
-      vv.removeEventListener("scroll", onResize);
-    };
+    return () => { vv.removeEventListener("resize", onResize); vv.removeEventListener("scroll", onResize); };
   }, []);
-  const isGenerating = status === "generating";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, status]);
+
+  const isActive = status === "reading" || status === "generating";
 
   const handleSend = () => {
-    if (!value.trim() || isGenerating) return;
+    if (!value.trim() || isActive) return;
     onSend(value.trim());
     setValue("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
     e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
   };
-
-  const toggleVoice = () => setListening(p => !p);
 
   return (
     <div
@@ -80,22 +77,18 @@ export default function ChatPanel({ status, messages, onSend, onStop, onOpenPrev
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
-        <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
-        <span className="text-white/60 text-xs font-medium tracking-wide uppercase">Описание проекта</span>
+        <div className="w-1.5 h-1.5 rounded-full bg-[#9333ea]" />
+        <span className="text-white/60 text-xs font-medium tracking-wide uppercase">Командный центр</span>
       </div>
 
-      {/* Messages — scrollable */}
+      {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3">
         <AnimatePresence initial={false}>
-          {messages.length === 0 && (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col gap-2 mt-2"
-            >
-              <p className="text-white/30 text-xs font-medium mb-2">Попробуйте:</p>
+
+          {/* Suggestions — empty state */}
+          {messages.length === 0 && !isActive && (
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-2 mt-2">
+              <p className="text-white/30 text-xs font-medium mb-1">Попробуйте:</p>
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s}
@@ -103,7 +96,7 @@ export default function ChatPanel({ status, messages, onSend, onStop, onOpenPrev
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.07 }}
                   onClick={() => { setValue(s); textareaRef.current?.focus(); }}
-                  className="text-left px-3 py-2 rounded-lg border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:border-violet-500/30 text-white/50 hover:text-white/80 text-xs transition-all"
+                  className="text-left px-3 py-2 rounded-lg border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:border-[#9333ea]/30 text-white/50 hover:text-white/80 text-xs transition-all"
                 >
                   {s}
                 </motion.button>
@@ -111,106 +104,151 @@ export default function ChatPanel({ status, messages, onSend, onStop, onOpenPrev
             </motion.div>
           )}
 
+          {/* Messages */}
           {messages.map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
-              className={`flex flex-col gap-1 ${msg.role === "user" ? "items-end" : "items-start"}`}
+              className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
-              <div className={`max-w-[88%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+              <div className={`max-w-[90%] px-3 py-2.5 rounded-xl text-xs leading-relaxed ${
                 msg.role === "user"
-                  ? "bg-violet-600/80 text-white rounded-tr-sm"
+                  ? "bg-[#9333ea]/80 text-white rounded-tr-sm"
                   : "bg-white/[0.05] border border-white/[0.08] text-white/70 rounded-tl-sm"
               }`}>
                 {msg.text}
               </div>
+
+              {/* Кнопка «Применить изменения» — только для ответов с HTML */}
+              {msg.role === "assistant" && msg.html && (
+                <div className="flex items-center gap-2 ml-1">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onApply(msg.id, msg.html!)}
+                    disabled={deployingId === msg.id}
+                    className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-semibold transition-all border ${
+                      deployingId === msg.id
+                        ? "bg-[#9333ea]/20 border-[#9333ea]/30 text-purple-300 cursor-wait"
+                        : "bg-[#9333ea] hover:bg-[#7e22ce] border-transparent text-white shadow-[0_0_12px_#9333ea40]"
+                    }`}
+                  >
+                    <Icon
+                      name={deployingId === msg.id ? "Loader" : "Github"}
+                      size={12}
+                      className={deployingId === msg.id ? "animate-spin" : ""}
+                    />
+                    {deployingId === msg.id ? "Обновляю GitHub..." : "Применить изменения"}
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {deployResult?.id === msg.id && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}
+                      >
+                        {deployResult.ok ? "✓ " : "✕ "}{deployResult.message}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </motion.div>
           ))}
 
-          {/* Typing indicator */}
-          {isGenerating && (
+          {/* Cycle status indicator */}
+          {isActive && (
             <motion.div
-              key="typing"
+              key="cycle"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex items-start gap-2"
+              className="flex flex-col gap-2"
             >
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
-                <Icon name="Sparkles" size={10} className="text-white" />
+              {/* Step indicators */}
+              <div className="flex gap-2 items-center">
+                {CYCLE_STEPS.map((step) => {
+                  const isCurrentStep = status === step.key;
+                  const isDone =
+                    (step.key === "reading" && status === "generating");
+                  return (
+                    <div key={step.key} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition-all ${
+                      isCurrentStep
+                        ? "bg-[#9333ea]/15 border-[#9333ea]/40 text-[#9333ea]"
+                        : isDone
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : "bg-white/[0.03] border-white/[0.06] text-white/20"
+                    }`}>
+                      <Icon
+                        name={isDone ? "CheckCircle" : step.icon}
+                        size={10}
+                        className={isCurrentStep ? "animate-pulse" : ""}
+                      />
+                      {step.label}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="bg-white/[0.05] border border-white/[0.08] px-3 py-2 rounded-xl rounded-tl-sm flex items-center gap-1">
-                {[0, 1, 2].map(i => (
-                  <motion.span
-                    key={i}
-                    className="w-1 h-1 rounded-full bg-violet-400"
-                    animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
-                    transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
-                  />
-                ))}
+
+              {/* Typing dots */}
+              <div className="flex items-center gap-2 ml-1">
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shrink-0 shadow-[0_0_8px_#9333ea60]">
+                  <Icon name="Sparkles" size={10} className="text-white" />
+                </div>
+                <div className="bg-white/[0.05] border border-white/[0.08] px-3 py-2 rounded-xl rounded-tl-sm flex items-center gap-1">
+                  {[0, 1, 2].map(i => (
+                    <motion.span
+                      key={i}
+                      className="w-1 h-1 rounded-full bg-[#9333ea]"
+                      animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                      transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
+                    />
+                  ))}
+                  <span className="text-white/30 text-[10px] ml-1.5">{cycleLabel}</span>
+                </div>
               </div>
             </motion.div>
           )}
+
         </AnimatePresence>
         <div ref={bottomRef} />
       </div>
 
-      {/* "View site" button — shown when preview is ready (mobile only) */}
-      {onOpenPreview && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="px-3 pb-1 shrink-0"
-        >
+      {/* View preview — mobile */}
+      {onOpenPreview && messages.length > 0 && (
+        <div className="px-3 pb-1 shrink-0 md:hidden">
           <button
             onClick={onOpenPreview}
-            className="w-full h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+            className="w-full h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
           >
-            <Icon name="ExternalLink" size={14} />
-            Посмотреть сайт
+            <Icon name="ExternalLink" size={13} />
+            Посмотреть результат
           </button>
-        </motion.div>
+        </div>
       )}
 
-      {/* Input area — fixed at bottom */}
+      {/* Input */}
       <div className="px-3 pb-3 pt-2 border-t border-white/[0.06] shrink-0">
         <div className="flex flex-col gap-2">
-          {/* Textarea */}
-          <div className="flex items-end gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-violet-500/40 transition-colors">
+          <div className="flex items-end gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-[#9333ea]/40 transition-colors">
             <textarea
               ref={textareaRef}
               value={value}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              disabled={isGenerating}
-              placeholder="Опишите сайт, который хотите создать..."
+              disabled={isActive}
+              placeholder={isActive ? "Обрабатываю..." : "Напишите команду, например: «Сделай фон белым»..."}
               rows={1}
-              className="flex-1 bg-transparent text-white/80 placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[100px]"
+              className="flex-1 bg-transparent text-white/80 placeholder:text-white/20 resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[120px]"
               style={{ fontSize: "16px" }}
             />
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={toggleVoice}
-              className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors mb-0.5 ${
-                listening
-                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                  : "text-white/30 hover:text-white/60 hover:bg-white/[0.06]"
-              }`}
-            >
-              {listening
-                ? <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 0.7 }}>
-                    <Icon name="MicOff" size={14} />
-                  </motion.span>
-                : <Icon name="Mic" size={14} />
-              }
-            </motion.button>
           </div>
 
-          {/* Send / Stop */}
           <AnimatePresence mode="wait">
-            {isGenerating ? (
+            {isActive ? (
               <motion.button
                 key="stop"
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -218,24 +256,24 @@ export default function ChatPanel({ status, messages, onSend, onStop, onOpenPrev
                 exit={{ opacity: 0, scale: 0.9 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={onStop}
-                className="w-full h-10 rounded-xl bg-red-500/15 border border-red-500/25 hover:bg-red-500/25 text-red-400 font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+                className="w-full h-9 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
               >
-                <Icon name="Square" size={15} />
-                Стоп
+                <Icon name="StopCircle" size={14} />
+                Остановить
               </motion.button>
             ) : (
               <motion.button
-                key="play"
+                key="send"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={handleSend}
                 disabled={!value.trim()}
-                className="w-full h-10 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+                className="w-full h-9 rounded-xl bg-[#9333ea] hover:bg-[#7e22ce] disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-[0_0_16px_#9333ea30]"
               >
-                <Icon name="Play" size={15} />
-                Запустить
+                <Icon name="Send" size={14} />
+                Отправить команду
               </motion.button>
             )}
           </AnimatePresence>

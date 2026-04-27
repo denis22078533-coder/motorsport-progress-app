@@ -27,6 +27,24 @@ export function useGitHub() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   }, []);
 
+  const fetchFromGitHub = useCallback(async (): Promise<{ ok: boolean; html: string; message?: string }> => {
+    const { token, repo } = ghSettings;
+    if (!token || !repo) return { ok: false, html: "", message: "Нет токена или репозитория" };
+
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/index.html`;
+    try {
+      const res = await fetch(apiUrl, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) return { ok: false, html: "", message: `GitHub вернул HTTP ${res.status}` };
+      const data = await res.json();
+      const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+      return { ok: true, html: decoded };
+    } catch (e) {
+      return { ok: false, html: "", message: String(e) };
+    }
+  }, [ghSettings]);
+
   const pushToGitHub = useCallback(async (html: string): Promise<{ ok: boolean; message: string }> => {
     const { token, repo } = ghSettings;
     if (!token) return { ok: false, message: "Введите GitHub Personal Token в настройках" };
@@ -44,7 +62,7 @@ export function useGitHub() {
         sha = data.sha as string;
       }
     } catch (_e) {
-      // файл может не существовать — создаём с нуля
+      // файл не существует — создадим новый
     }
 
     const content = btoa(unescape(encodeURIComponent(html)));
@@ -65,12 +83,12 @@ export function useGitHub() {
     });
 
     if (putRes.ok) {
-      return { ok: true, message: "Сайт успешно обновлён в GitHub!" };
+      return { ok: true, message: "Сайт обновлён в GitHub!" };
     } else {
       const err: { message?: string } = await putRes.json().catch(() => ({}));
       return { ok: false, message: err.message || `Ошибка GitHub: HTTP ${putRes.status}` };
     }
   }, [ghSettings]);
 
-  return { ghSettings, saveGhSettings, pushToGitHub };
+  return { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub };
 }
