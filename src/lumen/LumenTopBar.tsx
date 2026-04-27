@@ -4,6 +4,7 @@ import Icon from "@/components/ui/icon";
 interface Props {
   status: "idle" | "generating" | "done" | "error";
   cycleLabel?: string;
+  logoText?: string;
   onNewProject: () => void;
   onResetTheme: () => void;
   onSettings: () => void;
@@ -17,7 +18,7 @@ const STATUS_MAP = {
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, cycleLabel, onNewProject, onResetTheme, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, logoText = "L", onNewProject, onResetTheme, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -34,8 +35,15 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onResetT
       {/* Left — Logo + status */}
       <div className="flex items-center gap-2 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shadow-[0_0_8px_#9333ea80]">
-            <span className="text-white text-[10px] font-bold tracking-tight">L</span>
+          <div
+            className="w-5 h-5 rounded-md flex items-center justify-center"
+            style={{
+              background: "var(--lumen-accent, #9333ea)",
+              boxShadow: "0 0 8px var(--lumen-accent, #9333ea)80",
+              color: "var(--lumen-text, #fff)",
+            }}
+          >
+            <span className="text-[10px] font-bold tracking-tight">{logoText}</span>
           </div>
           <span className="text-white font-semibold text-sm tracking-tight">Lumen</span>
           <span className="hidden lg:inline text-white/20 text-[10px] font-medium tracking-wider ml-1">— Система управления реальностью сайтов</span>

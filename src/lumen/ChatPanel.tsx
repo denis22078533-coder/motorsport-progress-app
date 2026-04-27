@@ -15,6 +15,7 @@ interface Props {
   deployingId?: number | null;
   deployResult?: { id: number; ok: boolean; message: string } | null;
   liveUrl?: string;
+  placeholder?: string;
 }
 
 const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
@@ -23,14 +24,15 @@ const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
 ];
 
 const SUGGESTIONS = [
+  "Добавь кнопку голосового ввода",
   "Сделай фон белым",
+  "Добавь фото кота",
   "Поменяй акцент на изумрудный",
-  "Тёмно-синяя тема с золотым акцентом",
-  "Минималистичный светлый стиль",
+  "Замени логотип на эмодзи 🚀",
 ];
 
 export default function ChatPanel({
-  status, cycleLabel, messages, onSend, onStop, deployResult, liveUrl,
+  status, cycleLabel, messages, onSend, onStop, deployResult, liveUrl, placeholder,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
@@ -243,7 +245,7 @@ export default function ChatPanel({
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               disabled={isActive}
-              placeholder={isActive ? "Обрабатываю..." : "Например: «сделай фон белым», «акцент зелёный»…"}
+              placeholder={isActive ? "Обрабатываю..." : (placeholder || "Например: «добавь кнопку голос», «фон чёрный», «добавь фото кота»…")}
               rows={1}
               className="flex-1 bg-transparent resize-none outline-none leading-relaxed disabled:opacity-40 min-h-[20px] max-h-[120px]"
               style={{ fontSize: "16px", color: "var(--lumen-text, rgba(255,255,255,0.85))" }}

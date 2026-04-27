@@ -4,6 +4,7 @@ import LumenTopBar from "./LumenTopBar";
 import ChatPanel from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
 import LumenLoginPage from "./LumenLoginPage";
+import WidgetZone from "./WidgetZone";
 import { useLumenAuth } from "./useLumenAuth";
 import { useGitHub } from "./useGitHub";
 
@@ -14,6 +15,16 @@ export interface Message {
   role: "user" | "assistant";
   text: string;
   html?: string; // HTML-результат, который можно задеплоить
+}
+
+export interface Widget {
+  id: string;
+  kind: "button" | "image" | "text" | "icon" | "card";
+  label?: string;
+  icon?: string;
+  imageUrl?: string;
+  action?: string;
+  color?: string;
 }
 
 interface Settings {
@@ -33,33 +44,63 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 
-const THEME_SYSTEM_PROMPT = (currentTheme: Record<string, string>) =>
-  `Ты — стилист интерфейса Lumen. Пользователь описывает желаемое изменение внешнего вида самого приложения Lumen (фон, цвет акцента, цвет текста, кнопок и т.д.).
+const ACTIONS_SYSTEM_PROMPT = (state: { theme: Record<string, string>; widgets: Widget[] }) =>
+  `Ты — управляющий интерфейсом Lumen. Получаешь команду пользователя и возвращаешь СТРОГО валидный JSON со списком действий, которые Lumen применит к самому себе. Без markdown, без объяснений.
 
-Твоя задача — вернуть СТРОГО валидный JSON без единого слова объяснений и без markdown-блоков.
-
-Формат ответа:
+Формат:
 {
-  "bg": "#0a0a0f",
-  "panel": "#111118",
-  "accent": "#9333ea",
-  "accentHover": "#7e22ce",
-  "text": "#ffffff",
-  "textMuted": "rgba(255,255,255,0.6)",
-  "border": "rgba(255,255,255,0.08)",
-  "comment": "Короткое описание того, что изменилось (1 фраза по-русски)"
+  "actions": [ ... ],
+  "comment": "Короткая фраза по-русски о том, что сделано"
 }
 
-ПРАВИЛА:
-1. Все цвета — валидные CSS: HEX (#rrggbb), rgb(), rgba(), либо CSS-имена.
-2. Меняй ТОЛЬКО то, что просит пользователь. Остальные поля — оставь как в текущей теме.
-3. Контраст обязателен: текст должен быть читаемым на фоне.
-4. Если просят "светлую тему" — bg светлый, text тёмный. Если "тёмную" — наоборот.
-5. accent и accentHover должны отличаться (hover темнее или насыщеннее).
-6. comment — короткая фраза, что именно изменилось.
+ДОСТУПНЫЕ ACTIONS:
 
-ТЕКУЩАЯ ТЕМА:
-${JSON.stringify(currentTheme, null, 2)}`;
+1. setTheme — меняет цвета интерфейса
+   { "type": "setTheme", "theme": { "bg": "#fff", "accent": "#10b981", "text": "#000", "panel": "...", "accentHover": "...", "textMuted": "...", "border": "..." } }
+   Указывай только те поля, что меняешь. Контраст обязателен.
+
+2. addWidget — добавляет элемент в зону виджетов Lumen
+   { "type": "addWidget", "widget": {
+       "id": "уникальный-id",
+       "kind": "button" | "image" | "text" | "icon" | "card",
+       "label": "Текст (для button/text/card)",
+       "icon": "имя-lucide-иконки (Mic, Heart, Star...) — для button/icon/card",
+       "imageUrl": "URL картинки — для image",
+       "action": "alert:текст" | "open:https://..." | "voice" | "copy:текст" | "none",
+       "color": "hex-цвет (опционально)"
+     } }
+
+3. removeWidget — удаляет виджет по id
+   { "type": "removeWidget", "id": "..." }
+
+4. updateWidget — меняет существующий виджет
+   { "type": "updateWidget", "id": "...", "patch": { "label": "...", "icon": "...", "color": "..." } }
+
+5. clearWidgets — удаляет все виджеты
+   { "type": "clearWidgets" }
+
+6. setPlaceholder — меняет плейсхолдер поля ввода
+   { "type": "setPlaceholder", "text": "..." }
+
+7. setLogo — меняет букву/эмодзи в логотипе Lumen
+   { "type": "setLogo", "text": "L" }
+
+8. notify — показать всплывающее сообщение
+   { "type": "notify", "text": "...", "level": "info" | "success" | "error" }
+
+ПРАВИЛА:
+- Возвращай минимум нужных действий. Не ломай существующее без необходимости.
+- icon: только реальные имена иконок lucide-react в PascalCase (Mic, Phone, Heart, Star, Bell, Camera, Image, Send и т.п.).
+- Если просят "добавь кнопку ввода голосом" → addWidget с kind:"button", icon:"Mic", label:"Голосовой ввод", action:"voice".
+- Если просят "добавь фото X" → addWidget с kind:"image", imageUrl: подходящий URL (можно использовать https://images.unsplash.com/photo-... или https://picsum.photos/seed/КЛЮЧ/600/400).
+- Если просят "добавь иконку сердце" → addWidget с kind:"icon", icon:"Heart".
+- Если просят "удали кнопку голос" — removeWidget с id виджета голоса (смотри текущий список).
+- Если просят "перепиши текст подсказки на ..." — setPlaceholder.
+- Если просят "проанализируй дизайн" — верни actions:[] и в comment напиши анализ (2-4 предложения).
+- comment всегда — краткое русское описание выполненного.
+
+ТЕКУЩЕЕ СОСТОЯНИЕ:
+${JSON.stringify(state, null, 2)}`;
 
 
 
@@ -99,6 +140,16 @@ export default function LumenApp() {
     } catch { return DEFAULT_THEME; }
   });
 
+  const [widgets, setWidgets] = useState<Widget[]>(() => {
+    try { return JSON.parse(localStorage.getItem("lumen_widgets") || "[]"); }
+    catch { return []; }
+  });
+  const [placeholder, setPlaceholder] = useState<string>(() =>
+    localStorage.getItem("lumen_placeholder") || "");
+  const [logoText, setLogoText] = useState<string>(() =>
+    localStorage.getItem("lumen_logo") || "L");
+  const [toast, setToast] = useState<{ text: string; level: "info" | "success" | "error" } | null>(null);
+
   useEffect(() => {
     const root = document.documentElement;
     Object.entries(theme).forEach(([k, v]) => {
@@ -106,6 +157,80 @@ export default function LumenApp() {
     });
     try { localStorage.setItem("lumen_theme", JSON.stringify(theme)); } catch (_e) { /* ignore */ }
   }, [theme]);
+
+  useEffect(() => {
+    try { localStorage.setItem("lumen_widgets", JSON.stringify(widgets)); } catch (_e) { /* ignore */ }
+  }, [widgets]);
+  useEffect(() => { localStorage.setItem("lumen_placeholder", placeholder); }, [placeholder]);
+  useEffect(() => { localStorage.setItem("lumen_logo", logoText); }, [logoText]);
+
+  const handleWidgetAction = useCallback((action?: string) => {
+    if (!action || action === "none") return;
+    if (action === "voice") {
+      const W = window as unknown as { webkitSpeechRecognition?: new () => unknown; SpeechRecognition?: new () => unknown };
+      const SR = W.SpeechRecognition || W.webkitSpeechRecognition;
+      if (!SR) { setToast({ text: "Голосовой ввод не поддерживается браузером", level: "error" }); return; }
+      try {
+        const rec = new (SR as new () => { lang: string; onresult: (e: { results: { 0: { 0: { transcript: string } } }[] }) => void; onerror: () => void; start: () => void }) ();
+        rec.lang = "ru-RU";
+        rec.onresult = (e) => {
+          const txt = e.results[0][0].transcript;
+          setToast({ text: `Распознано: ${txt}`, level: "success" });
+        };
+        rec.onerror = () => setToast({ text: "Ошибка распознавания", level: "error" });
+        rec.start();
+        setToast({ text: "Слушаю...", level: "info" });
+      } catch {
+        setToast({ text: "Не удалось запустить микрофон", level: "error" });
+      }
+      return;
+    }
+    if (action.startsWith("alert:")) { setToast({ text: action.slice(6), level: "info" }); return; }
+    if (action.startsWith("open:")) { window.open(action.slice(5), "_blank"); return; }
+    if (action.startsWith("copy:")) {
+      navigator.clipboard?.writeText(action.slice(5));
+      setToast({ text: "Скопировано", level: "success" });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const applyActions = useCallback((actions: Array<Record<string, unknown>>) => {
+    actions.forEach((a) => {
+      const type = a.type as string;
+      if (type === "setTheme" && a.theme && typeof a.theme === "object") {
+        const t = a.theme as Record<string, string>;
+        setTheme((prev) => {
+          const next = { ...prev };
+          ["bg", "panel", "accent", "accentHover", "text", "textMuted", "border"].forEach((k) => {
+            if (t[k] && typeof t[k] === "string") next[k] = t[k];
+          });
+          return next;
+        });
+      } else if (type === "addWidget" && a.widget) {
+        const w = a.widget as Widget;
+        if (!w.id) w.id = `w_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        setWidgets((prev) => [...prev.filter((x) => x.id !== w.id), w]);
+      } else if (type === "removeWidget" && typeof a.id === "string") {
+        setWidgets((prev) => prev.filter((x) => x.id !== a.id));
+      } else if (type === "updateWidget" && typeof a.id === "string" && a.patch) {
+        const patch = a.patch as Partial<Widget>;
+        setWidgets((prev) => prev.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
+      } else if (type === "clearWidgets") {
+        setWidgets([]);
+      } else if (type === "setPlaceholder" && typeof a.text === "string") {
+        setPlaceholder(a.text);
+      } else if (type === "setLogo" && typeof a.text === "string") {
+        setLogoText(a.text.slice(0, 4));
+      } else if (type === "notify" && typeof a.text === "string") {
+        setToast({ text: a.text, level: (a.level as "info" | "success" | "error") || "info" });
+      }
+    });
+  }, []);
 
   const abortRef = useRef(false);
 
@@ -187,27 +312,25 @@ export default function LumenApp() {
 
     try {
       setCycleStatus("generating");
-      setCycleLabel("Подбираю стиль для Lumen...");
+      setCycleLabel("Думаю...");
 
-      const rawResponse = await callAI(THEME_SYSTEM_PROMPT(theme), text);
+      const rawResponse = await callAI(ACTIONS_SYSTEM_PROMPT({ theme, widgets }), text);
 
       if (abortRef.current) return;
 
-      const parsed = extractJson(rawResponse);
+      const parsed = extractJson(rawResponse) as unknown as { actions?: Array<Record<string, unknown>>; comment?: string };
+      const actions = Array.isArray(parsed.actions) ? parsed.actions : [];
       const comment = (parsed.comment || "").toString();
-      const newTheme = { ...theme };
-      ["bg", "panel", "accent", "accentHover", "text", "textMuted", "border"].forEach((k) => {
-        if (parsed[k] && typeof parsed[k] === "string") newTheme[k] = parsed[k];
-      });
 
-      setTheme(newTheme);
+      applyActions(actions);
+
       setCycleStatus("done");
       setCycleLabel("");
 
       setMessages(prev => [...prev, {
         id: ++msgCounter,
         role: "assistant",
-        text: comment ? `Готово! ${comment}` : "Готово! Стиль Lumen обновлён.",
+        text: comment || (actions.length ? `Готово! Применено действий: ${actions.length}` : "Готово!"),
       }]);
 
     } catch (err) {
@@ -218,7 +341,7 @@ export default function LumenApp() {
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, theme]);
+  }, [settings, theme, widgets, applyActions]);
 
   const handleStop = () => {
     abortRef.current = true;
@@ -235,7 +358,10 @@ export default function LumenApp() {
 
   const handleResetTheme = () => {
     setTheme(DEFAULT_THEME);
-    setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Тема сброшена к стандартной." }]);
+    setWidgets([]);
+    setPlaceholder("");
+    setLogoText("L");
+    setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Lumen сброшен к стандартному виду." }]);
   };
 
   const handleSaveSettings = (s: Settings) => {
@@ -265,10 +391,17 @@ export default function LumenApp() {
           <LumenTopBar
             status={topStatus}
             cycleLabel={cycleLabel}
+            logoText={logoText}
             onNewProject={handleNewProject}
             onResetTheme={handleResetTheme}
             onSettings={() => setSettingsOpen(true)}
             onLogout={logout}
+          />
+
+          <WidgetZone
+            widgets={widgets}
+            onAction={handleWidgetAction}
+            onRemove={(id) => setWidgets((prev) => prev.filter((w) => w.id !== id))}
           />
 
           {/* Main content — only chat */}
@@ -280,8 +413,29 @@ export default function LumenApp() {
               onSend={handleSend}
               onStop={handleStop}
               deployResult={deployResult}
+              placeholder={placeholder}
             />
           </div>
+
+          {/* Toast */}
+          <AnimatePresence>
+            {toast && (
+              <motion.div
+                key="toast"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl text-xs font-medium shadow-2xl border max-w-[90vw]"
+                style={{
+                  background: toast.level === "error" ? "rgba(239,68,68,0.95)" : toast.level === "success" ? "rgba(16,185,129,0.95)" : "var(--lumen-panel, rgba(0,0,0,0.9))",
+                  borderColor: "var(--lumen-border, rgba(255,255,255,0.1))",
+                  color: "#fff",
+                }}
+              >
+                {toast.text}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <SettingsDrawer
             open={settingsOpen}
