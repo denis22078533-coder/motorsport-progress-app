@@ -224,8 +224,6 @@ export default function LumenApp() {
 
       if (abortRef.current) return;
 
-      setCycleStatus("done");
-      setCycleLabel("");
       setPreviewHtml(cleanHtml);
       setMobileTab("preview");
 
@@ -234,10 +232,35 @@ export default function LumenApp() {
         id: assistantId,
         role: "assistant",
         text: currentHtml
-          ? "Готово! Правки внесены. Нажмите «Применить изменения», чтобы обновить сайт в GitHub."
-          : "Готово! Сайт создан. Нажмите «Применить изменения», чтобы опубликовать в GitHub.",
+          ? "Готово! Правки внесены. Загружаю в GitHub..."
+          : "Готово! Сайт создан. Загружаю в GitHub...",
         html: cleanHtml,
       }]);
+
+      // ── Шаг 3: автодеплой в GitHub ───────────────────────────────────────
+      if (ghSettings.token && ghSettings.repo) {
+        setCycleLabel("Загружаю в GitHub...");
+        const filePath = currentFilePath || (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
+        const pushResult = await pushToGitHub(cleanHtml, "", filePath);
+
+        if (pushResult.ok) {
+          try {
+            const fresh = await fetchFromGitHub();
+            if (fresh.ok) {
+              setCurrentFileSha(fresh.sha);
+              setCurrentFilePath(fresh.filePath);
+            }
+          } catch (_e) { /* не критично */ }
+        }
+
+        setCycleStatus(pushResult.ok ? "done" : "error");
+        setCycleLabel("");
+        setDeployResult({ id: assistantId, ...pushResult });
+        setTimeout(() => setDeployResult(null), pushResult.ok ? 8000 : 30000);
+      } else {
+        setCycleStatus("done");
+        setCycleLabel("");
+      }
 
     } catch (err) {
       if (!abortRef.current) {
@@ -247,7 +270,7 @@ export default function LumenApp() {
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, ghSettings, fetchFromGitHub]);
+  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath]);
 
   const handleApply = useCallback(async (msgId: number, html: string) => {
     if (!ghSettings.token) { setSettingsOpen(true); return; }

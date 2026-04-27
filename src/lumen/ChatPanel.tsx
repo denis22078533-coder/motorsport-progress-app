@@ -127,52 +127,30 @@ export default function ChatPanel({
                 {msg.text}
               </div>
 
-              {/* Кнопка «Применить изменения» — только для ответов с HTML */}
-              {msg.role === "assistant" && msg.html && (
+              {/* Статус автодеплоя — только для ответов с HTML */}
+              {msg.role === "assistant" && msg.html && deployResult?.id === msg.id && (
                 <div className="flex items-center gap-2 ml-1">
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => onApply(msg.id, msg.html!)}
-                    disabled={deployingId === msg.id}
-                    className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-semibold transition-all border ${
-                      deployingId === msg.id
-                        ? "bg-[#9333ea]/20 border-[#9333ea]/30 text-purple-300 cursor-wait"
-                        : "bg-[#9333ea] hover:bg-[#7e22ce] border-transparent text-white shadow-[0_0_12px_#9333ea40]"
-                    }`}
+                  <motion.div
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center gap-2 flex-wrap"
                   >
-                    <Icon
-                      name={deployingId === msg.id ? "Loader" : "Github"}
-                      size={12}
-                      className={deployingId === msg.id ? "animate-spin" : ""}
-                    />
-                    {deployingId === msg.id ? "Обновляю GitHub..." : "Применить изменения"}
-                  </motion.button>
-
-                  <AnimatePresence>
-                    {deployResult?.id === msg.id && (
-                      <motion.div
-                        initial={{ opacity: 0, x: -4 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-2"
+                    <span className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}>
+                      {deployResult.ok ? "✓ Обновлено в GitHub" : `✕ ${deployResult.message}`}
+                    </span>
+                    {deployResult.ok && liveUrl && (
+                      <a
+                        href={liveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-[10px] font-semibold transition-colors"
                       >
-                        <span className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}>
-                          {deployResult.ok ? "✓ Обновлено!" : `✕ ${deployResult.message}`}
-                        </span>
-                        {deployResult.ok && liveUrl && (
-                          <a
-                            href={liveUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-[10px] font-semibold transition-colors"
-                          >
-                            <Icon name="ExternalLink" size={10} />
-                            Посмотреть сайт
-                          </a>
-                        )}
-                      </motion.div>
+                        <Icon name="ExternalLink" size={10} />
+                        Посмотреть сайт
+                      </a>
                     )}
-                  </AnimatePresence>
+                  </motion.div>
                 </div>
               )}
             </motion.div>

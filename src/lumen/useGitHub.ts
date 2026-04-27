@@ -86,32 +86,57 @@ export function useGitHub() {
     }
 
     const content = btoa(unescape(encodeURIComponent(html)));
-    const body: Record<string, string> = {
-      message: `Lumen: правки в ${path}`,
-      content,
-      branch: "main",
+
+    const doPut = async (shaToUse: string) => {
+      const reqBody: Record<string, string> = {
+        message: `Lumen: правки в ${path}`,
+        content,
+        branch: "main",
+      };
+      if (shaToUse) reqBody.sha = shaToUse;
+      const r = await fetch(apiUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reqBody),
+      });
+      const d = await r.json().catch(() => ({})) as { message?: string };
+      return { status: r.status, ok: r.ok, data: d };
     };
-    if (actualSha) body.sha = actualSha;
 
     console.log("[Lumen→GitHub] PUT", apiUrl, { sha: actualSha, branch: "main", contentLength: content.length });
+    let result = await doPut(actualSha);
+    console.log("[Lumen→GitHub] Response", result.status, result.data);
 
-    const putRes = await fetch(apiUrl, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    // Если SHA не совпал — перезапрашиваем актуальный и повторяем (до 3 попыток)
+    let attempts = 0;
+    while (!result.ok && attempts < 3 && /sha|match|conflict/i.test(result.data.message || "")) {
+      attempts++;
+      console.log(`[Lumen→GitHub] SHA mismatch, retry #${attempts}`);
+      try {
+        const refresh = await fetch(`${apiUrl}?ref=main&_=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Cache-Control": "no-cache" },
+        });
+        if (refresh.ok) {
+          const fresh = await refresh.json() as { sha: string };
+          actualSha = fresh.sha;
+          result = await doPut(actualSha);
+          console.log("[Lumen→GitHub] Retry response", result.status, result.data);
+        } else {
+          break;
+        }
+      } catch (_e) {
+        break;
+      }
+    }
 
-    const responseData = await putRes.json().catch(() => ({})) as { message?: string; content?: unknown };
-    console.log("[Lumen→GitHub] Response", putRes.status, responseData);
-
-    if (putRes.ok) {
-      return { ok: true, message: `Файл ${path} обновлён в GitHub (HTTP ${putRes.status})` };
+    if (result.ok) {
+      return { ok: true, message: `Файл ${path} обновлён в GitHub (HTTP ${result.status})` };
     } else {
-      return { ok: false, message: responseData.message || `Ошибка GitHub: HTTP ${putRes.status}` };
+      return { ok: false, message: result.data.message || `Ошибка GitHub: HTTP ${result.status}` };
     }
   }, [ghSettings]);
 
