@@ -311,7 +311,7 @@ export default function LumenApp() {
             </div>
 
             <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
-              <LivePreview html={previewHtml} />
+              <LivePreview status={topStatus} previewHtml={previewHtml} />
             </div>
           </div>
 
