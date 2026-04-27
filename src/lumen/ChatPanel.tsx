@@ -14,6 +14,7 @@ interface Props {
   onApply: (msgId: number, html: string) => Promise<void>;
   deployingId: number | null;
   deployResult: { id: number; ok: boolean; message: string } | null;
+  liveUrl: string;
   onOpenPreview?: () => void;
 }
 
@@ -31,7 +32,7 @@ const SUGGESTIONS = [
 
 export default function ChatPanel({
   status, cycleLabel, messages, onSend, onStop, onApply,
-  deployingId, deployResult, onOpenPreview,
+  deployingId, deployResult, liveUrl, onOpenPreview,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
@@ -144,14 +145,27 @@ export default function ChatPanel({
 
                   <AnimatePresence>
                     {deployResult?.id === msg.id && (
-                      <motion.span
+                      <motion.div
                         initial={{ opacity: 0, x: -4 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0 }}
-                        className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}
+                        className="flex items-center gap-2"
                       >
-                        {deployResult.ok ? "✓ " : "✕ "}{deployResult.message}
-                      </motion.span>
+                        <span className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}>
+                          {deployResult.ok ? "✓ Обновлено!" : `✕ ${deployResult.message}`}
+                        </span>
+                        {deployResult.ok && liveUrl && (
+                          <a
+                            href={liveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-[10px] font-semibold transition-colors"
+                          >
+                            <Icon name="ExternalLink" size={10} />
+                            Посмотреть сайт
+                          </a>
+                        )}
+                      </motion.div>
                     )}
                   </AnimatePresence>
                 </div>

@@ -52,6 +52,11 @@ export default function LumenApp() {
   const { authed, login, logout } = useLumenAuth();
   const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub } = useGitHub();
 
+  const liveUrl = (() => {
+    const [user, repo] = (ghSettings.repo || "").split("/");
+    return user && repo ? `https://${user}.github.io/${repo}/` : "";
+  })();
+
   const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -300,6 +305,7 @@ export default function LumenApp() {
                 onApply={handleApply}
                 deployingId={deployingId}
                 deployResult={deployResult}
+                liveUrl={liveUrl}
                 onOpenPreview={() => setMobileTab("preview")}
               />
             </div>
