@@ -402,7 +402,7 @@ export default function LumenApp() {
                 deployResult={deployResult}
                 liveUrl={liveUrl}
                 onOpenPreview={() => setMobileTab("preview")}
-                onLoadFromGitHub={ghSettings.token && ghSettings.repo ? handleLoadFromGitHub : undefined}
+                onLoadFromGitHub={handleLoadFromGitHub}
                 loadingFromGitHub={loadingFromGitHub}
                 currentFilePath={ghSettings.filePath || "index.html"}
               />
