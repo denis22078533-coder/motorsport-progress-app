@@ -6,7 +6,7 @@ interface Props {
   onNewProject: () => void;
   onExport: () => void;
   onSettings: () => void;
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
 const STATUS_MAP = {
@@ -73,14 +73,7 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
           <Icon name="Settings" size={14} />
         </button>
 
-        {/* Logout */}
-        <button
-          onClick={onLogout}
-          title="Выйти"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-white/25 hover:text-red-400 hover:bg-red-500/[0.08] transition-colors"
-        >
-          <Icon name="LogOut" size={13} />
-        </button>
+
       </div>
     </motion.header>
   );

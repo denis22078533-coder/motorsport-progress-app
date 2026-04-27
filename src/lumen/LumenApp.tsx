@@ -39,7 +39,13 @@ export default function LumenApp() {
   const [status, setStatus] = useState<Status>("idle");
   const [messages, setMessages] = useState<Message[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem("lumen_settings");
+      const s = saved ? JSON.parse(saved) : null;
+      return !s || !s.apiKey;
+    } catch { return true; }
+  });
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
   const [settings, setSettings] = useState<Settings>(() => {
     try {
