@@ -42,15 +42,18 @@ export function useGitHub() {
     const path = (filePath || "index.html").trim().replace(/^\//, "");
     if (!token || !repo) return { ok: false, html: "", sha: "", filePath: path, message: "Нет токена или репозитория" };
 
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}?ref=main`;
     try {
       const res = await fetch(apiUrl, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
       });
-      if (!res.ok) return { ok: false, html: "", sha: "", filePath: path, message: `GitHub вернул HTTP ${res.status}` };
-      const data = await res.json();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({})) as { message?: string };
+        return { ok: false, html: "", sha: "", filePath: path, message: `GitHub HTTP ${res.status}: ${errData.message || "неизвестная ошибка"}` };
+      }
+      const data = await res.json() as { content: string; sha: string };
       const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
-      return { ok: true, html: decoded, sha: data.sha as string, filePath: path };
+      return { ok: true, html: decoded, sha: data.sha, filePath: path };
     } catch (e) {
       return { ok: false, html: "", sha: "", filePath: path, message: String(e) };
     }
@@ -68,26 +71,25 @@ export function useGitHub() {
     const path = (filePath || "index.html").trim().replace(/^\//, "");
     const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
 
-    // Если sha не передан — получаем актуальный
+    // Всегда получаем свежий SHA из ветки main перед записью
     let actualSha = sha;
-    if (!actualSha) {
-      try {
-        const getRes = await fetch(apiUrl, {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-        });
-        if (getRes.ok) {
-          const data = await getRes.json();
-          actualSha = data.sha as string;
-        }
-      } catch (_e) {
-        // файл новый
+    try {
+      const getRes = await fetch(`${apiUrl}?ref=main`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+      });
+      if (getRes.ok) {
+        const data = await getRes.json() as { sha: string };
+        actualSha = data.sha;
       }
+    } catch (_e) {
+      // файл новый — sha не нужен
     }
 
     const content = btoa(unescape(encodeURIComponent(html)));
     const body: Record<string, string> = {
       message: `Lumen: правки в ${path}`,
       content,
+      branch: "main",
     };
     if (actualSha) body.sha = actualSha;
 
@@ -104,7 +106,7 @@ export function useGitHub() {
     if (putRes.ok) {
       return { ok: true, message: `Файл ${path} обновлён в GitHub!` };
     } else {
-      const err: { message?: string } = await putRes.json().catch(() => ({}));
+      const err = await putRes.json().catch(() => ({})) as { message?: string };
       return { ok: false, message: err.message || `Ошибка GitHub: HTTP ${putRes.status}` };
     }
   }, [ghSettings]);
