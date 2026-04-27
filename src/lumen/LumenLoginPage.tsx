@@ -44,7 +44,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
         <motion.div
           animate={{ scale: [1, 1.05, 1], opacity: [0.15, 0.22, 0.15] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/20 blur-[120px]"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#9333ea]/25 blur-[120px]"
         />
         <motion.div
           animate={{ scale: [1.05, 1, 1.05], opacity: [0.1, 0.18, 0.1] }}
@@ -79,7 +79,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.15, duration: 0.4, ease: "easeOut" }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-[0_0_40px_rgba(124,58,237,0.4)] mb-4"
+            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shadow-[0_0_50px_#9333ea60] mb-4"
           >
             <span className="text-white text-2xl font-bold tracking-tight">L</span>
           </motion.div>
@@ -95,9 +95,9 @@ export default function LumenLoginPage({ onLogin }: Props) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.35 }}
-            className="text-white/30 text-sm mt-1"
+            className="text-white/30 text-sm mt-1 text-center"
           >
-            AI Website Generator
+            Система управления реальностью сайтов
           </motion.p>
         </div>
 
@@ -123,7 +123,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
                 className={`w-full h-11 bg-white/[0.05] border rounded-xl px-4 pr-11 text-white text-sm placeholder:text-white/20 outline-none transition-all ${
                   error
                     ? "border-red-500/50 focus:border-red-500/70 bg-red-500/[0.04]"
-                    : "border-white/[0.08] focus:border-violet-500/50 focus:bg-white/[0.07]"
+                    : "border-white/[0.08] focus:border-[#9333ea]/50 focus:bg-white/[0.07]"
                 }`}
               />
               <button
@@ -157,7 +157,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
               disabled={!password.trim() || loading}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
-              className="h-11 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors mt-1"
+              className="h-11 rounded-xl bg-[#9333ea] hover:bg-[#7e22ce] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors mt-1 shadow-[0_0_20px_#9333ea40]"
             >
               {loading ? (
                 <>

@@ -6,7 +6,7 @@ interface Props {
   onNewProject: () => void;
   onExport: () => void;
   onSettings: () => void;
-  onLogout?: () => void;
+  onLogout: () => void;
 }
 
 const STATUS_MAP = {
@@ -24,15 +24,16 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="h-11 flex items-center justify-between px-3 border-b border-white/[0.06] bg-[#0a0a0f]/80 backdrop-blur-xl z-50 shrink-0 min-w-0"
+      className="h-11 flex items-center justify-between px-3 border-b border-[#9333ea]/20 bg-[#07070c]/90 backdrop-blur-xl z-50 shrink-0 min-w-0"
     >
       {/* Left — Logo + status */}
       <div className="flex items-center gap-2 min-w-0">
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shadow-[0_0_8px_#9333ea80]">
             <span className="text-white text-[10px] font-bold tracking-tight">L</span>
           </div>
           <span className="text-white font-semibold text-sm tracking-tight">Lumen</span>
+          <span className="hidden lg:inline text-white/20 text-[10px] font-medium tracking-wider ml-1">— Система управления реальностью сайтов</span>
         </div>
 
         <div className="hidden sm:block w-px h-4 bg-white/10 shrink-0" />
@@ -59,7 +60,7 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onNewProject}
-          className="flex items-center gap-1 h-7 px-2.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
+          className="flex items-center gap-1 h-7 px-2.5 rounded-md bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-colors"
         >
           <Icon name="Plus" size={13} />
           <span className="hidden sm:inline">Новый</span>
@@ -73,7 +74,14 @@ export default function LumenTopBar({ status, onNewProject, onExport, onSettings
           <Icon name="Settings" size={14} />
         </button>
 
-
+        {/* Logout */}
+        <button
+          onClick={onLogout}
+          title="Выйти"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-white/25 hover:text-red-400 hover:bg-red-500/[0.08] transition-colors"
+        >
+          <Icon name="LogOut" size={13} />
+        </button>
       </div>
     </motion.header>
   );
