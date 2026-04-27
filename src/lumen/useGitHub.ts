@@ -93,6 +93,8 @@ export function useGitHub() {
     };
     if (actualSha) body.sha = actualSha;
 
+    console.log("[Lumen→GitHub] PUT", apiUrl, { sha: actualSha, branch: "main", contentLength: content.length });
+
     const putRes = await fetch(apiUrl, {
       method: "PUT",
       headers: {
@@ -103,11 +105,13 @@ export function useGitHub() {
       body: JSON.stringify(body),
     });
 
+    const responseData = await putRes.json().catch(() => ({})) as { message?: string; content?: unknown };
+    console.log("[Lumen→GitHub] Response", putRes.status, responseData);
+
     if (putRes.ok) {
-      return { ok: true, message: `Файл ${path} обновлён в GitHub!` };
+      return { ok: true, message: `Файл ${path} обновлён в GitHub (HTTP ${putRes.status})` };
     } else {
-      const err = await putRes.json().catch(() => ({})) as { message?: string };
-      return { ok: false, message: err.message || `Ошибка GitHub: HTTP ${putRes.status}` };
+      return { ok: false, message: responseData.message || `Ошибка GitHub: HTTP ${putRes.status}` };
     }
   }, [ghSettings]);
 
