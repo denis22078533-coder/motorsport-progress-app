@@ -34,17 +34,48 @@ const DEFAULT_SETTINGS: Settings = {
   proxyUrl: import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba",
 };
 
-const EDIT_SYSTEM_PROMPT = (currentHtml: string) =>
+
+const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ без единого слова объяснений и без markdown-блоков.
+
+ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА — нарушение недопустимо:
+
+1. СТРУКТУРА ДОКУМЕНТА:
+   - Начинай строго с <!DOCTYPE html>, заканчивай </html>
+   - Все пути к ресурсам — ТОЛЬКО относительные: assets/... (без ведущего слэша)
+   - Кодировка: <meta charset="UTF-8">
+   - Viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+2. TAILWIND CSS — подключай ВСЕГДА первым в <head>:
+   <script src="https://cdn.tailwindcss.com"></script>
+   После него конфигурируй через <script>tailwind.config = { ... }</script> если нужны кастомные цвета.
+
+3. LUCIDE ICONS — подключай ВСЕГДА:
+   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+   Использование иконок: <i data-lucide="имя-иконки"></i>
+   В конце <body> вызывай: <script>lucide.createIcons();</script>
+
+4. ДИЗАЙН — строго тёмный glassmorphism:
+   - Фон: тёмный градиент (slate-900, gray-950, black)
+   - Карточки: backdrop-blur-xl, bg-white/5, border border-white/10, rounded-2xl
+   - Текст: белый/серый (text-white, text-gray-300, text-gray-400)
+   - Акценты: фиолетовый/индиго/циан (violet-500, indigo-400, cyan-400)
+   - Кнопки: градиентные bg-gradient-to-r, с hover-эффектами и transition
+   - Тени: shadow-2xl, drop-shadow с цветными glow-эффектами
+
+5. НИКАКИХ внешних изображений (img src с http). Только SVG-иконки через Lucide или CSS-фигуры.
+
+6. Адаптивность обязательна (mobile-first через Tailwind breakpoints).`;
+
+const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `Ты — редактор сайтов. Тебе дан ТЕКУЩИЙ КОД сайта и команда пользователя на изменение.
 Верни ТОЛЬКО полный обновлённый HTML-документ (<!DOCTYPE html>...) с внесёнными правками.
 Никакого объяснения, никакого markdown — только чистый HTML.
-Сохраняй весь остальной контент и стили без изменений, меняй только то, о чём просит пользователь.
+Сохраняй все подключённые CDN (Tailwind, Lucide и др.), все стили и контент без изменений — меняй только то, о чём просит пользователь.
+Все пути к ресурсам — относительные (assets/..., без ведущего слэша).
 
 --- ТЕКУЩИЙ КОД САЙТА ---
 ${currentHtml}
 --- КОНЕЦ КОДА ---`;
-
-const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...) с встроенными CSS-стилями в теге <style>. Никакого объяснения, никакого markdown — только чистый HTML. Стиль: современный, красивый, тёмная тема, адаптивный.`;
 
 
 
@@ -162,7 +193,7 @@ export default function LumenApp() {
         const fetched = await fetchFromGitHub();
         if (fetched.ok && fetched.html) {
           currentHtml = fetched.html;
-          systemPrompt = EDIT_SYSTEM_PROMPT(currentHtml);
+          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml);
         }
       }
 
