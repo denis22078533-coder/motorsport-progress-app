@@ -29,7 +29,7 @@ const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   provider: "openai",
   model: "gpt-4o-mini",
-  baseUrl: "https://proxyapi.ru",
+  baseUrl: import.meta.env.VITE_DEFAULT_OPENAI_BASE || "https://proxyapi.ru",
 };
 
 const EDIT_SYSTEM_PROMPT = (currentHtml: string) =>
@@ -44,7 +44,7 @@ ${currentHtml}
 
 const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...) с встроенными CSS-стилями в теге <style>. Никакого объяснения, никакого markdown — только чистый HTML. Стиль: современный, красивый, тёмная тема, адаптивный.`;
 
-const PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
+const PROXY_URL = import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
 
 let msgCounter = 0;
 

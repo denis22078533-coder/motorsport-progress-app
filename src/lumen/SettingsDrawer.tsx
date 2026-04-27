@@ -109,7 +109,7 @@ export default function SettingsDrawer({ open, onClose, settings, onSave, ghSett
                       {(["openai", "claude"] as const).map((p) => (
                         <button
                           key={p}
-                          onClick={() => setForm(f => ({ ...f, provider: p, model: MODELS[p][0], baseUrl: p === "openai" ? "https://proxyapi.ru" : "https://api.anthropic.com" }))}
+                          onClick={() => setForm(f => ({ ...f, provider: p, model: MODELS[p][0], baseUrl: p === "openai" ? (import.meta.env.VITE_DEFAULT_OPENAI_BASE || "https://proxyapi.ru") : (import.meta.env.VITE_DEFAULT_CLAUDE_BASE || "https://api.anthropic.com") }))}
                           className={`h-9 rounded-lg border text-sm font-medium transition-all ${
                             form.provider === p
                               ? "border-[#9333ea]/50 bg-[#9333ea]/10 text-purple-300"
