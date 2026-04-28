@@ -66,7 +66,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
           }`}
         >
           <Icon name={convertingZip ? "Loader" : "PackageOpen"} size={11} className={convertingZip ? "animate-spin" : ""} />
-          {convertingZip ? "Читаю..." : "ZIP проект"}
+          {convertingZip ? "Читаю..." : "Загрузить ZIP код"}
         </button>
 
         {/* Отменить */}
@@ -111,7 +111,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
           }`}
         >
           <Icon name="Download" size={11} />
-          Скачать HTML
+          Скачать index.html
         </button>
 
         {/* Живая ссылка */}
