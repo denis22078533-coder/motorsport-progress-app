@@ -157,8 +157,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
           }}
         />
 
-        {/* Radial vignette */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,transparent_40%,#07070c_100%)] pointer-events-none" />
+
 
         {/* Content */}
         <AnimatePresence mode="wait">
