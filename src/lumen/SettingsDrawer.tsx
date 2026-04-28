@@ -21,8 +21,29 @@ interface Props {
 }
 
 const MODELS = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-  claude: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
+  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini", "o1-mini"],
+  claude: [
+    "claude-opus-4-5",
+    "claude-sonnet-4-5",
+    "claude-haiku-4-5",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
+    "claude-3-opus-20240229",
+  ],
+};
+
+const MODEL_LABELS: Record<string, string> = {
+  "gpt-4o": "GPT-4o — флагман",
+  "gpt-4o-mini": "GPT-4o mini — быстрый",
+  "gpt-4-turbo": "GPT-4 Turbo",
+  "o3-mini": "o3-mini — рассуждения",
+  "o1-mini": "o1-mini — рассуждения",
+  "claude-opus-4-5": "Claude Opus 4.5 — максимум",
+  "claude-sonnet-4-5": "Claude Sonnet 4.5 — баланс",
+  "claude-haiku-4-5": "Claude Haiku 4.5 — быстрый",
+  "claude-3-5-sonnet-20241022": "Claude Sonnet 3.5 — топ",
+  "claude-3-5-haiku-20241022": "Claude Haiku 3.5",
+  "claude-3-opus-20240229": "Claude Opus 3",
 };
 
 type Tab = "ai" | "github";
@@ -131,14 +152,17 @@ export default function SettingsDrawer({ open, onClose, settings, onSave, ghSett
                         <button
                           key={m}
                           onClick={() => setForm(f => ({ ...f, model: m }))}
-                          className={`h-9 px-3 rounded-lg border text-sm font-mono text-left transition-all flex items-center justify-between ${
+                          className={`min-h-[2.25rem] px-3 py-2 rounded-lg border text-sm text-left transition-all flex items-center justify-between gap-2 ${
                             form.model === m
                               ? "border-[#9333ea]/40 bg-[#9333ea]/10 text-purple-300"
                               : "border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white/60 hover:border-white/15"
                           }`}
                         >
-                          {m}
-                          {form.model === m && <Icon name="Check" size={13} className="text-[#9333ea]" />}
+                          <span className="flex flex-col">
+                            <span className="font-medium leading-tight">{MODEL_LABELS[m] ?? m}</span>
+                            <span className="font-mono text-[10px] opacity-50 leading-tight">{m}</span>
+                          </span>
+                          {form.model === m && <Icon name="Check" size={13} className="text-[#9333ea] shrink-0" />}
                         </button>
                       ))}
                     </div>
