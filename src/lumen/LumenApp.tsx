@@ -142,7 +142,10 @@ export default function LumenApp() {
   const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(() => {
+    try { return localStorage.getItem("lumen_last_html") || null; } catch { return null; }
+  });
+  const [htmlHistory, setHtmlHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
   const [deployingId, setDeployingId] = useState<number | null>(null);
@@ -152,6 +155,28 @@ export default function LumenApp() {
   const [loadingFromGitHub, setLoadingFromGitHub] = useState(false);
   const [fullCodeContext, setFullCodeContext] = useState<{ html: string; fileName: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Сохраняем HTML в localStorage при каждом изменении
+  const savePreviewHtml = (html: string | null) => {
+    setPreviewHtml(prev => {
+      if (prev) setHtmlHistory(h => [...h.slice(-9), prev]); // храним до 10 версий
+      return html;
+    });
+    try {
+      if (html) localStorage.setItem("lumen_last_html", html);
+      else localStorage.removeItem("lumen_last_html");
+    } catch { /* ignore */ }
+  };
+
+  const handleUndo = () => {
+    setHtmlHistory(h => {
+      const prev = h[h.length - 1];
+      if (!prev) return h;
+      setPreviewHtml(prev);
+      try { localStorage.setItem("lumen_last_html", prev); } catch { /* ignore */ }
+      return h.slice(0, -1);
+    });
+  };
 
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -293,7 +318,7 @@ export default function LumenApp() {
       if (abortRef.current) return;
 
       const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
-      setPreviewHtml(htmlWithBase);
+      savePreviewHtml(htmlWithBase);
       setMobileTab("preview");
 
       const assistantId = ++msgCounter;
@@ -385,7 +410,7 @@ export default function LumenApp() {
     if (fetched.ok && fetched.html) {
       setCurrentFileSha(fetched.sha);
       setCurrentFilePath(fetched.filePath);
-      setPreviewHtml(liveUrl ? injectBaseHref(fetched.html, liveUrl) : fetched.html);
+      savePreviewHtml(liveUrl ? injectBaseHref(fetched.html, liveUrl) : fetched.html);
       setMobileTab("preview");
       const id = ++msgCounter;
       setMessages([{
@@ -411,7 +436,7 @@ export default function LumenApp() {
       const html = ev.target?.result as string;
       if (!html) return;
       setFullCodeContext({ html, fileName: file.name });
-      setPreviewHtml(liveUrl ? injectBaseHref(html, liveUrl) : html);
+      savePreviewHtml(liveUrl ? injectBaseHref(html, liveUrl) : html);
       setMobileTab("preview");
       setMessages([{
         id: ++msgCounter,
@@ -425,7 +450,8 @@ export default function LumenApp() {
 
   const handleNewProject = () => {
     setMessages([]);
-    setPreviewHtml(null);
+    savePreviewHtml(null);
+    setHtmlHistory([]);
     setCycleStatus("idle");
     setCycleLabel("");
     setMobileTab("chat");
@@ -573,6 +599,9 @@ export default function LumenApp() {
                 liveUrl={liveUrl}
                 onApplyToGitHub={ghSettings.token && ghSettings.repo ? handleApplyToGitHub : undefined}
                 onDownload={previewHtml ? handleExport : undefined}
+                onUndo={htmlHistory.length > 0 ? handleUndo : undefined}
+                canUndo={htmlHistory.length > 0}
+                onLoadFile={() => fileInputRef.current?.click()}
               />
             </div>
           </div>

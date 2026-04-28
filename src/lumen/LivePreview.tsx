@@ -8,11 +8,14 @@ interface Props {
   liveUrl?: string;
   onApplyToGitHub?: () => Promise<void>;
   onDownload?: () => void;
+  onUndo?: () => void;
+  canUndo?: boolean;
+  onLoadFile?: () => void;
 }
 
 const GRID_SIZE = 32;
 
-export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onDownload }: Props) {
+export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onDownload, onUndo, canUndo, onLoadFile }: Props) {
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -37,7 +40,31 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
     <div className="relative flex-1 w-full h-full min-w-0 min-h-0 overflow-hidden bg-[#07070c] flex flex-col">
 
       {/* Action Bar — всегда видимый */}
-      <div className="shrink-0 z-10 flex items-center gap-2 px-3 py-2 bg-[#0d0d18] border-b border-white/[0.07]">
+      <div className="shrink-0 z-10 flex items-center gap-1.5 px-3 py-2 bg-[#0d0d18] border-b border-white/[0.07] flex-wrap">
+
+        {/* Загрузить файл */}
+        <button
+          onClick={onLoadFile}
+          className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all bg-cyan-500/15 border border-cyan-500/30 hover:bg-cyan-500/25 hover:border-cyan-500/50 text-cyan-400 hover:text-cyan-300"
+        >
+          <Icon name="FolderOpen" size={11} />
+          Загрузить
+        </button>
+
+        {/* Отменить */}
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="Вернуться к предыдущей версии"
+          className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
+            canUndo
+              ? "bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 hover:border-amber-500/50 text-amber-400 hover:text-amber-300"
+              : "bg-white/[0.02] border border-white/[0.04] text-white/15 cursor-not-allowed"
+          }`}
+        >
+          <Icon name="Undo2" size={11} />
+          Отменить
+        </button>
 
         {/* Применить в GitHub */}
         <button
@@ -52,7 +79,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
           }`}
         >
           <Icon name={applying ? "Loader" : "Upload"} size={11} className={applying ? "animate-spin" : ""} />
-          {applying ? "Сохраняю..." : "Применить"}
+          {applying ? "Сохраняю..." : "В GitHub"}
         </button>
 
         {/* Скачать */}
@@ -61,12 +88,12 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
           disabled={!hasPreview || !onDownload}
           className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
             hasPreview && onDownload
-              ? "bg-white/[0.05] border border-white/[0.09] hover:bg-white/[0.10] hover:border-white/20 text-white/50 hover:text-white/80"
+              ? "bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300"
               : "bg-white/[0.02] border border-white/[0.04] text-white/15 cursor-not-allowed"
           }`}
         >
           <Icon name="Download" size={11} />
-          Скачать
+          Скачать HTML
         </button>
 
         {/* Живая ссылка */}
