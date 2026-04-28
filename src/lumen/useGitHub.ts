@@ -6,12 +6,14 @@ export interface GitHubSettings {
   token: string;
   repo: string;
   filePath: string;
+  siteUrl: string;
 }
 
 const DEFAULT: GitHubSettings = {
   token: "",
   repo: "denis22078533-coder/Lumin-platform",
   filePath: "index.html",
+  siteUrl: "",
 };
 
 function load(): GitHubSettings {

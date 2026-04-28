@@ -268,6 +268,23 @@ export default function SettingsDrawer({ open, onClose, settings, onSave, ghSett
                     <p className="text-white/20 text-xs mt-1.5">Путь внутри репозитория: <span className="font-mono">index.html</span> или <span className="font-mono">pages/about.html</span></p>
                   </div>
 
+                  {/* Site URL */}
+                  <div>
+                    <label className="text-white/40 text-xs font-medium uppercase tracking-wider block mb-2">
+                      URL живого сайта
+                    </label>
+                    <input
+                      type="text"
+                      value={ghForm.siteUrl ?? ""}
+                      onChange={e => setGhForm(f => ({ ...f, siteUrl: e.target.value.trim() }))}
+                      placeholder="https://username.github.io/repo/"
+                      className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-white/70 text-sm font-mono placeholder:text-white/20 outline-none focus:border-[#9333ea]/40 transition-colors"
+                    />
+                    <p className="text-white/20 text-xs mt-1.5 leading-relaxed">
+                      Адрес опубликованного сайта — нужен чтобы картинки и стили подгружались во вкладке «Сайт». Если пусто — строится автоматически из репозитория.
+                    </p>
+                  </div>
+
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3.5 flex flex-col gap-1.5">
                     <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">Как получить Token</p>
                     <p className="text-white/30 text-xs leading-relaxed">

@@ -110,6 +110,10 @@ export default function LumenApp() {
   const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub } = useGitHub();
 
   const liveUrl = (() => {
+    if (ghSettings.siteUrl?.trim()) {
+      const u = ghSettings.siteUrl.trim();
+      return u.endsWith("/") ? u : u + "/";
+    }
     const [user, repo] = (ghSettings.repo || "").split("/");
     return user && repo ? `https://${user}.github.io/${repo}/` : "";
   })();
