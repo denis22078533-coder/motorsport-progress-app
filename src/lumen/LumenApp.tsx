@@ -105,6 +105,17 @@ const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
 ${currentHtml}
 --- КОНЕЦ КОДА ---`;
 
+const ZIP_CONVERT_SYSTEM_PROMPT = `Ты — эксперт по конвертации React/Vite проектов в HTML. Твоя ЕДИНСТВЕННАЯ задача — точно воссоздать существующий сайт из предоставленных файлов проекта в виде одного HTML файла.
+
+СТРОГИЕ ПРАВИЛА:
+1. Верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...) — без объяснений, без markdown.
+2. ЗАПРЕЩЕНО придумывать новый дизайн, цвета, тексты — воссоздавай ТОЧНО то что есть в файлах.
+3. Сохраняй все тексты, заголовки, описания, названия из оригинальных файлов проекта.
+4. Сохраняй цветовую схему, шрифты, стили из оригинала.
+5. Подключай через CDN: Tailwind CSS, Lucide иконки, Google Fonts (если используются).
+6. Весь JS — инлайн в <script> тегах.
+7. Адаптивность обязательна.`;
+
 const LOCAL_FILE_EDIT_PROMPT = (currentHtml: string, fileName: string) =>
   `Ты — хирургический редактор HTML. Тебе загружен локальный файл «${fileName}». Твоя задача — внести ТОЛЬКО запрошенное изменение, вернуть ПОЛНЫЙ изменённый HTML-документ целиком.
 
@@ -271,7 +282,9 @@ export default function LumenApp() {
       setCycleLabel("Конвертирую в HTML...");
       setCycleStatus("generating");
 
-      const rawResponse = await callAI(CREATE_SYSTEM_PROMPT, zipPrompt);
+      const rawResponse = await callAI(ZIP_CONVERT_SYSTEM_PROMPT, zipPrompt, (chars) => {
+        setCycleLabel(`Конвертирую... ${chars} симв.`);
+      });
       const cleanHtml = extractHtml(rawResponse);
 
       if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
