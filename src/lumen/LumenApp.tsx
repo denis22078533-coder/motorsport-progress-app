@@ -85,9 +85,7 @@ export default function LumenApp() {
   const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [previewHtml, setPreviewHtml] = useState<string | null>(() => {
-    try { return localStorage.getItem("lumen_last_html") || null; } catch { return null; }
-  });
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [htmlHistory, setHtmlHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
