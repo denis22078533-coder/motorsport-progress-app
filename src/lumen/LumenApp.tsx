@@ -38,7 +38,8 @@ const DEFAULT_SETTINGS: Settings = {
 const CREATE_SYSTEM_PROMPT = `Выполняй запрос пользователя точно и буквально.
 Если просят сайт — верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...</html>) без объяснений и markdown.
 Используй Tailwind CSS (<script src="https://cdn.tailwindcss.com"></script>), Lucide иконки и Google Fonts через CDN если нужно.
-ВАЖНО: всегда используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.`;
+ВАЖНО: всегда используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
+КАРТИНКИ: Если в запросе переданы готовые URL картинок — ОБЯЗАТЕЛЬНО используй их в <img src="..."> тегах. Не используй placeholder-картинки если есть готовые URL.`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
@@ -535,14 +536,17 @@ export default function LumenApp() {
 
       if (abortRef.current) return;
 
-      // ── Шаг 1.5: генерируем картинки если просят ─────────────────────────
+      // ── Шаг 1.5: генерируем картинки если нужны ──────────────────────────
       let enrichedText = text;
-      const wantsImages = /картинк|фото|изображени|image|photo|picture|товар.*фото|фото.*товар/i.test(text);
+      const wantsImages = /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|товар|продукт|блюд|еда|ресторан|кафе|кофейн|магазин|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
       if (wantsImages) {
         setCycleStatus("generating");
         setCycleLabel("Генерирую картинки...");
         const imgPromptsRaw = await callAI(
-          "Ты помощник. Пользователь просит создать сайт. Придумай ровно 3 коротких описания картинок на английском для этого сайта. Верни ТОЛЬКО JSON массив строк, например: [\"prompt1\",\"prompt2\",\"prompt3\"]. Без пояснений.",
+          `Пользователь просит создать сайт. Определи какие картинки нужны и придумай 2-3 коротких описания на английском языке для генерации изображений через AI.
+Правила: описания должны точно соответствовать теме сайта, быть визуально красивыми, фотореалистичными.
+Верни ТОЛЬКО JSON массив строк, например: ["modern gym interior with equipment", "fitness trainer with client"].
+Без пояснений, только JSON.`,
           text
         );
         let imgPrompts: string[] = [];
@@ -567,8 +571,17 @@ export default function LumenApp() {
             } catch { /* продолжаем без этой картинки */ }
           }
           if (generatedUrls.length > 0) {
-            const urlList = generatedUrls.map((u, i) => `Картинка ${i + 1}: ${u}`).join("\n");
-            enrichedText = `${text}\n\nИСПОЛЬЗУЙ ЭТИ ГОТОВЫЕ URL КАРТИНОК (вставь их в <img src="...">):\n${urlList}`;
+            const urlList = generatedUrls.map((u, i) => `URL картинки ${i + 1}: ${u}`).join("\n");
+            enrichedText = `${text}
+
+ВАЖНО: Я уже сгенерировал специальные картинки для этого сайта. ОБЯЗАТЕЛЬНО используй их в дизайне:
+${urlList}
+
+Требования к использованию картинок:
+- Первая картинка — главный баннер/герой секция на всю ширину (object-fit: cover, height: 400-500px)
+- Остальные картинки — в галерее, карточках или секциях сайта
+- Все <img> должны иметь style="object-fit: cover" и заданные размеры
+- НЕ используй placeholder-картинки — только переданные URL`;
           }
         }
       }
@@ -577,10 +590,10 @@ export default function LumenApp() {
 
       // ── Шаг 2: генерируем HTML ────────────────────────────────────────────
       setCycleStatus("generating");
-      setCycleLabel("Генерирую...");
+      setCycleLabel("Создаю сайт...");
 
       const rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
-        setCycleLabel(`Генерирую... ${chars} симв.`);
+        setCycleLabel(`Создаю сайт... ${chars} симв.`);
       });
       const cleanHtml = extractHtml(rawResponse);
 
