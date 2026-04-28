@@ -678,8 +678,8 @@ export default function LumenApp() {
           </div>
 
           {/* Main content */}
-          <div className="flex-1 min-h-0 overflow-hidden md:flex md:gap-2 md:p-2">
-            <div className={`flex flex-col h-full md:w-[420px] md:flex-none ${mobileTab === "chat" ? "flex" : "hidden md:flex"}`}>
+          <div className="flex-1 min-h-0 overflow-hidden relative md:flex md:gap-2 md:p-2">
+            <div className={`flex flex-col h-full md:w-[420px] md:flex-none bg-[#0a0a0f] md:static ${mobileTab === "chat" ? "absolute inset-0 z-10 flex" : "hidden md:flex"}`}>
               <ChatPanel
                 status={cycleStatus}
                 cycleLabel={cycleLabel}
