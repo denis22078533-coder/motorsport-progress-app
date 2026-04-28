@@ -42,6 +42,7 @@ const CREATE_SYSTEM_PROMPT = `Выполняй запрос пользовате
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
+ВАЖНО: используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
 
 --- ТЕКУЩИЙ КОД САЙТА ---
 ${currentHtml}
@@ -60,6 +61,7 @@ const ZIP_CONVERT_SYSTEM_PROMPT = `Ты — эксперт по конверта
 
 const LOCAL_FILE_EDIT_PROMPT = (currentHtml: string, fileName: string) =>
   `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
+ВАЖНО: используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
 
 --- ТЕКУЩИЙ КОД ФАЙЛА «${fileName}» ---
 ${currentHtml}
@@ -276,6 +278,20 @@ export default function LumenApp() {
     return tagMatch ? tagMatch[1].trim() : raw.trim();
   };
 
+  // Инжектирует принудительный светлый фон если в HTML нет явного светлого background
+  const injectLightTheme = (html: string): string => {
+    const forceCss = `<style data-lumen-fix>
+      html,body{background:#ffffff!important;color:#111111!important;}
+    </style>`;
+    if (/<\/head>/i.test(html)) {
+      return html.replace(/<\/head>/i, `${forceCss}</head>`);
+    }
+    if (/<body/i.test(html)) {
+      return html.replace(/<body([^>]*)>/i, `<head>${forceCss}</head><body$1>`);
+    }
+    return forceCss + html;
+  };
+
   // Инжектирует <base href> в HTML чтобы относительные пути assets/ работали через живой домен
   const injectBaseHref = (html: string, baseUrl: string): string => {
     if (!baseUrl) return html;
@@ -416,7 +432,7 @@ export default function LumenApp() {
       if (abortRef.current) return;
 
       const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
-      savePreviewHtml(htmlWithBase);
+      savePreviewHtml(injectLightTheme(htmlWithBase));
       setMobileTab("preview");
 
       const assistantId = ++msgCounter;
@@ -508,7 +524,7 @@ export default function LumenApp() {
     if (fetched.ok && fetched.html) {
       setCurrentFileSha(fetched.sha);
       setCurrentFilePath(fetched.filePath);
-      savePreviewHtml(liveUrl ? injectBaseHref(fetched.html, liveUrl) : fetched.html);
+      savePreviewHtml(injectLightTheme(liveUrl ? injectBaseHref(fetched.html, liveUrl) : fetched.html));
       setMobileTab("preview");
       const id = ++msgCounter;
       setMessages([{
@@ -534,7 +550,7 @@ export default function LumenApp() {
       const html = ev.target?.result as string;
       if (!html) return;
       setFullCodeContext({ html, fileName: file.name });
-      savePreviewHtml(liveUrl ? injectBaseHref(html, liveUrl) : html);
+      savePreviewHtml(injectLightTheme(liveUrl ? injectBaseHref(html, liveUrl) : html));
       setMobileTab("preview");
       setMessages([{
         id: ++msgCounter,
