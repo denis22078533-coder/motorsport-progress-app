@@ -174,71 +174,97 @@ export default function LumenApp() {
 
     setConvertingZip(true);
     setCycleStatus("reading");
-    setCycleLabel("Читаю архив проекта...");
+    setCycleLabel("Читаю архив...");
 
     try {
-      const files = await readZipFiles(file);
-      const fileCount = Object.keys(files).length;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const JSZip = (window as any).JSZip;
+      if (!JSZip) throw new Error("JSZip ещё не загружен, попробуйте ещё раз");
+      const zip = await JSZip.loadAsync(file);
 
-      if (fileCount === 0) {
-        throw new Error("В архиве не найдены файлы проекта (.tsx, .css, .html)");
+      // Ищем готовый index.html — сначала в dist/, потом в корне
+      const candidates = ["dist/index.html", "build/index.html", "index.html"];
+      let foundHtml = "";
+      let foundPath = "";
+
+      for (const candidate of candidates) {
+        const entry = zip.file(candidate);
+        if (entry) {
+          foundHtml = await entry.async("string");
+          foundPath = candidate;
+          break;
+        }
       }
 
-      // Формируем контекст для AI — все файлы проекта
-      const filesContext = Object.entries(files)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([path, content]) => `\n\n### Файл: ${path}\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``)
-        .join("");
+      // Если не нашли по точным путям — ищем любой index.html в архиве
+      if (!foundHtml) {
+        zip.forEach((relativePath: string, zipEntry: { dir: boolean; async: (t: string) => Promise<string> }) => {
+          if (!foundHtml && !zipEntry.dir && relativePath.endsWith("index.html")) {
+            foundPath = relativePath;
+          }
+        });
+        if (foundPath) {
+          foundHtml = await zip.file(foundPath)!.async("string");
+        }
+      }
 
-      const zipPrompt = `Тебе загружен React/Vite проект (${fileCount} файлов). Конвертируй его в один самодостаточный HTML файл.
+      if (foundHtml) {
+        // Нашли готовый HTML — показываем сразу без ИИ
+        const htmlWithBase = liveUrl ? injectBaseHref(foundHtml, liveUrl) : foundHtml;
+        savePreviewHtml(htmlWithBase);
+        setMobileTab("preview");
+        setCycleStatus("done");
+        setCycleLabel("");
+        setMessages(prev => [...prev, {
+          id: ++msgCounter,
+          role: "assistant",
+          text: `Загружен «${foundPath}» из архива. Опишите что нужно изменить — отредактирую.`,
+        }]);
+      } else {
+        // Готового HTML нет — конвертируем через ИИ
+        const files = await readZipFiles(file);
+        const fileCount = Object.keys(files).length;
+        if (fileCount === 0) throw new Error("В архиве не найдены файлы проекта");
 
-ЗАДАЧА: Воссоздай этот сайт максимально точно — сохрани весь дизайн, цвета, тексты, структуру страниц, анимации.
+        const filesContext = Object.entries(files)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([path, content]) => `\n\n### Файл: ${path}\n\`\`\`\n${content.slice(0, 6000)}\n\`\`\``)
+          .join("");
 
-ТЕХНИЧЕСКИЕ ТРЕБОВАНИЯ:
-1. Один файл <!DOCTYPE html>...</html> — без внешних зависимостей кроме CDN
-2. Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
-3. Lucide иконки: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script> + lucide.createIcons() в конце body
-4. Google Fonts через <link> если используются шрифты
-5. Все стили — инлайн через Tailwind классы или <style> в head
-6. Весь JavaScript — инлайн в <script> тегах
-7. Навигация между секциями — через якоря или JS показ/скрытие блоков
-8. Все тексты, заголовки, описания — точно как в оригинале
-9. Адаптивность — mobile-first
-
-Верни ТОЛЬКО HTML документ, без объяснений.
+        const zipPrompt = `Конвертируй этот React/Vite проект (${fileCount} файлов) в один HTML файл. Сохрани все тексты, цвета и структуру точно как в оригинале. Верни ТОЛЬКО HTML.
 
 --- ФАЙЛЫ ПРОЕКТА ---${filesContext}
 --- КОНЕЦ ФАЙЛОВ ---`;
 
-      setCycleLabel("Конвертирую в HTML...");
-      setCycleStatus("generating");
+        setCycleLabel("Конвертирую...");
+        setCycleStatus("generating");
 
-      const rawResponse = await callAI(ZIP_CONVERT_SYSTEM_PROMPT, zipPrompt, (chars) => {
-        setCycleLabel(`Конвертирую... ${chars} симв.`);
-      });
-      const cleanHtml = extractHtml(rawResponse);
+        const rawResponse = await callAI(ZIP_CONVERT_SYSTEM_PROMPT, zipPrompt, (chars) => {
+          setCycleLabel(`Конвертирую... ${chars} симв.`);
+        });
+        const cleanHtml = extractHtml(rawResponse);
 
-      if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
-        throw new Error("Не удалось конвертировать проект. Попробуйте ещё раз.");
+        if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
+          throw new Error("Не удалось конвертировать проект. Попробуйте ещё раз.");
+        }
+
+        const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
+        savePreviewHtml(htmlWithBase);
+        setMobileTab("preview");
+        setCycleStatus("done");
+        setCycleLabel("");
+        setMessages(prev => [...prev, {
+          id: ++msgCounter,
+          role: "assistant",
+          text: `Проект «${file.name}» конвертирован (${fileCount} файлов). Опишите что нужно изменить — отредактирую.`,
+        }]);
       }
-
-      const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
-      savePreviewHtml(htmlWithBase);
-      setMobileTab("preview");
-      setCycleStatus("done");
-      setCycleLabel("");
-
-      setMessages(prev => [...prev, {
-        id: ++msgCounter,
-        role: "assistant",
-        text: `Проект «${file.name}» успешно конвертирован (${fileCount} файлов)! Вижу ваш сайт. Опишите что нужно изменить — отредактирую.`,
-      }]);
 
     } catch (err) {
       setCycleStatus("error");
       setCycleLabel("");
       const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
-      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка конвертации: ${errText}` }]);
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
     } finally {
       setConvertingZip(false);
     }
