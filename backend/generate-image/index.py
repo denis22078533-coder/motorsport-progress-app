@@ -8,7 +8,7 @@ import boto3
 
 
 def handler(event: dict, context) -> dict:
-    """Генерирует картинку через Fusionbrain (Kandinsky) и загружает в S3"""
+    """Генерирует картинку через Hugging Face (FLUX.1-schnell) и загружает в S3"""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400'}, 'body': ''}
@@ -18,61 +18,22 @@ def handler(event: dict, context) -> dict:
     if not prompt:
         return {'statusCode': 400, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': json.dumps({'error': 'prompt required'})}
 
-    api_key = os.environ['FUSIONBRAIN_API_KEY']
-    secret_key = os.environ['FUSIONBRAIN_SECRET_KEY']
-    base_url = 'https://api-key.fusionbrain.ai/'
+    token = os.environ['HUGGINGFACE_TOKEN']
 
-    # Получаем список моделей
-    models_resp = requests.get(
-        base_url + 'key/api/v1/models',
-        headers={'X-Key': f'Key {api_key}', 'X-Secret': f'Secret {secret_key}'},
-        timeout=15
-    )
-    models = models_resp.json()
-    model_id = models[0]['id']
-
-    # Запускаем генерацию
-    params = {
-        "type": "GENERATE",
-        "numImages": 1,
-        "width": 1024,
-        "height": 1024,
-        "generateParams": {"query": prompt}
-    }
-    gen_resp = requests.post(
-        base_url + 'key/api/v1/text2image/run',
-        headers={'X-Key': f'Key {api_key}', 'X-Secret': f'Secret {secret_key}'},
-        files={
-            'model_id': (None, str(model_id)),
-            'params': (None, json.dumps(params), 'application/json')
+    resp = requests.post(
+        'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
         },
-        timeout=30
+        json={'inputs': prompt},
+        timeout=60
     )
-    task_id = gen_resp.json().get('uuid')
-    if not task_id:
-        return {'statusCode': 500, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': json.dumps({'error': 'generation start failed', 'detail': gen_resp.json()})}
 
-    # Поллим результат
-    image_b64 = None
-    for _ in range(20):
-        time.sleep(5)
-        check = requests.get(
-            base_url + f'key/api/v1/text2image/status/{task_id}',
-            headers={'X-Key': f'Key {api_key}', 'X-Secret': f'Secret {secret_key}'},
-            timeout=15
-        )
-        data = check.json()
-        if data.get('status') == 'DONE':
-            image_b64 = data['images'][0]
-            break
-        elif data.get('status') == 'FAIL':
-            return {'statusCode': 500, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': json.dumps({'error': 'generation failed'})}
+    if resp.status_code != 200:
+        return {'statusCode': 500, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': json.dumps({'error': 'generation failed', 'detail': resp.text[:300]})}
 
-    if not image_b64:
-        return {'statusCode': 504, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': json.dumps({'error': 'timeout'})}
-
-    # Загружаем в S3
-    img_data = base64.b64decode(image_b64)
+    img_data = resp.content
     key = f'lumen-images/{uuid.uuid4()}.jpg'
     s3 = boto3.client(
         's3',
