@@ -35,11 +35,28 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 
+const PROJECT_STRUCTURE = `
+## Структура проекта Lumen (файловая система):
+- /src/ — React/Vite фронтенд (TypeScript, Tailwind CSS)
+  - /src/lumen/ — компоненты AI-ассистента (ChatPanel, LumenApp, LivePreview, SettingsDrawer)
+  - /src/components/ui/ — shadcn/ui компоненты (Button, Dialog, Drawer и др.)
+  - /src/index.css — глобальные CSS переменные и стили
+  - /src/App.tsx — точка входа приложения
+- /backend/ — Python 3.11 Cloud Functions
+  - /backend/lumen-proxy/ — прокси к OpenAI/Claude API со стримингом
+  - /backend/generate-image/ — генерация изображений через Pollinations + S3
+- /db_migrations/ — SQL-миграции PostgreSQL (Flyway, формат V{version}__{name}.sql)
+- /public/ — статические файлы
+- package.json, vite.config.ts, tailwind.config.ts — конфигурация проекта
+`;
+
 const CREATE_SYSTEM_PROMPT = `Выполняй запрос пользователя точно и буквально.
 Если просят сайт — верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...</html>) без объяснений и markdown.
 Используй Tailwind CSS (<script src="https://cdn.tailwindcss.com"></script>), Lucide иконки и Google Fonts через CDN если нужно.
 ВАЖНО: всегда используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
-КАРТИНКИ: Если в запросе переданы готовые URL картинок — ОБЯЗАТЕЛЬНО используй их в <img src="..."> тегах. Не используй placeholder-картинки если есть готовые URL.`;
+КАРТИНКИ: Если в запросе переданы готовые URL картинок — ОБЯЗАТЕЛЬНО используй их в <img src="..."> тегах. Не используй placeholder-картинки если есть готовые URL.
+
+${PROJECT_STRUCTURE}`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
@@ -98,6 +115,7 @@ export default function LumenApp() {
   const [currentFilePath, setCurrentFilePath] = useState<string>("");
   const [loadingFromGitHub, setLoadingFromGitHub] = useState(false);
   const [fullCodeContext, setFullCodeContext] = useState<{ html: string; fileName: string } | null>(null);
+  const [showRebuildBanner, setShowRebuildBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Сохраняем HTML в localStorage при каждом изменении
@@ -368,10 +386,29 @@ export default function LumenApp() {
     return html;
   };
 
-  const callAI = async (systemPrompt: string, userText: string, onProgress?: (chars: number) => void): Promise<string> => {
+  const buildChatHistory = (currentUserText: string, maxPairs = 8): { role: string; content: string }[] => {
+    // Берём последние maxPairs пар (user+assistant) из истории, исключая картинки и длинный HTML
+    const history: { role: string; content: string }[] = [];
+    const recent = messages.slice(-maxPairs * 2);
+    for (const msg of recent) {
+      if (msg.html?.startsWith("__IMAGE__:")) continue; // пропускаем картинки
+      const content = msg.html
+        ? msg.html.length > 8000 ? msg.text + "\n[предыдущий HTML-код сайта обрезан для экономии токенов]" : msg.html
+        : msg.text;
+      history.push({ role: msg.role === "user" ? "user" : "assistant", content });
+    }
+    history.push({ role: "user", content: currentUserText });
+    return history;
+  };
+
+  const callAI = async (systemPrompt: string, userText: string, onProgress?: (chars: number) => void, useHistory = false): Promise<string> => {
     const rawBase = (settings.baseUrl || "").trim().replace(/\/+$/, "");
     const baseUrl = rawBase || "https://proxyapi.ru";
     const isOpenAI = settings.provider === "openai";
+
+    const chatMessages = useHistory
+      ? buildChatHistory(userText)
+      : [{ role: "user", content: userText }];
 
     const requestBody = isOpenAI
       ? {
@@ -381,7 +418,7 @@ export default function LumenApp() {
           model: settings.model,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: userText },
+            ...chatMessages,
           ],
           max_tokens: 16000,
         }
@@ -392,7 +429,7 @@ export default function LumenApp() {
           model: settings.model,
           max_tokens: 16000,
           system: systemPrompt,
-          messages: [{ role: "user", content: userText }],
+          messages: chatMessages,
         };
 
     const proxyUrl = (settings.proxyUrl || "").trim() || (import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba");
@@ -478,10 +515,13 @@ export default function LumenApp() {
     setCycleStatus("generating");
     setCycleLabel("Думаю...");
     try {
+      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Lumen. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.
+${PROJECT_STRUCTURE}`;
       const response = await callAI(
-        "Ты дружелюбный AI-ассистент. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.",
+        chatSystemPrompt,
         text,
-        (chars) => setCycleLabel(`Думаю... ${chars} симв.`)
+        (chars) => setCycleLabel(`Думаю... ${chars} симв.`),
+        true // передаём историю чата
       );
       setCycleStatus("done");
       setCycleLabel("");
@@ -492,7 +532,7 @@ export default function LumenApp() {
       const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
       setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
     }
-  }, [settings]);
+  }, [settings, messages]);
 
   const handleSend = useCallback(async (text: string, mode: ChatMode = "site") => {
     abortRef.current = false;
@@ -592,9 +632,11 @@ ${urlList}
       setCycleStatus("generating");
       setCycleLabel("Создаю сайт...");
 
+      // При редактировании (есть контекст) — передаём историю чата для памяти изменений
+      const passHistory = !!(fullCodeContext || (ghSettings.token && ghSettings.repo && currentHtml));
       const rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
         setCycleLabel(`Создаю сайт... ${chars} симв.`);
-      });
+      }, passHistory);
       const cleanHtml = extractHtml(rawResponse);
 
       if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
@@ -617,6 +659,9 @@ ${urlList}
           : hasGitHub ? "Готово! Сайт создан. Загружаю в GitHub..." : "Готово! Сайт создан. Настройте GitHub для сохранения.",
         html: cleanHtml,
       }]);
+
+      // ── Показываем баннер о необходимости rebuild/публикации ──────────────
+      setShowRebuildBanner(!ghSettings.token || !ghSettings.repo);
 
       // ── Шаг 3: автодеплой в GitHub ───────────────────────────────────────
       if (ghSettings.token && ghSettings.repo) {
@@ -821,6 +866,20 @@ ${urlList}
             className="hidden"
             onChange={handleLoadZip}
           />
+
+          {/* Rebuild notification banner */}
+          {showRebuildBanner && (
+            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-amber-950/60 border-b border-amber-500/30 text-xs">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-amber-300 font-medium">Внесены правки в код — нажмите «Опубликовать» или сделайте пересборку проекта</span>
+              <button
+                onClick={() => setShowRebuildBanner(false)}
+                className="ml-auto text-amber-400/50 hover:text-amber-400 transition-colors text-[10px] px-2 py-0.5 rounded border border-amber-500/20 hover:border-amber-500/40"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Local file context banner */}
           {fullCodeContext && (
