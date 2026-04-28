@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import LumenTopBar from "./LumenTopBar";
 import LivePreview from "./LivePreview";
-import ChatPanel from "./ChatPanel";
+import ChatPanel, { ChatMode } from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
 import LumenLoginPage from "./LumenLoginPage";
 import { useLumenAuth } from "./useLumenAuth";
@@ -440,20 +440,83 @@ export default function LumenApp() {
     }
   };
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!settings.apiKey) { setSettingsOpen(true); return; }
-    abortRef.current = false;
+  const IMAGE_GENERATE_URL = "https://functions.poehali.dev/0f178db7-a08a-4911-8f10-5f45a0d585a3";
 
+  const handleSendImage = useCallback(async (text: string) => {
+    setCycleStatus("generating");
+    setCycleLabel("Генерирую картинку...");
+    try {
+      const r = await fetch(IMAGE_GENERATE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      });
+      const d = await r.json();
+      if (d.url) {
+        setCycleStatus("done");
+        setCycleLabel("");
+        setMessages(prev => [...prev, {
+          id: ++msgCounter,
+          role: "assistant",
+          text: `Картинка готова!`,
+          html: `__IMAGE__:${d.url}`,
+        }]);
+      } else {
+        throw new Error(d.error || "Ошибка генерации");
+      }
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
+    }
+  }, []);
+
+  const handleSendChat = useCallback(async (text: string) => {
+    if (!settings.apiKey) { setSettingsOpen(true); return; }
+    setCycleStatus("generating");
+    setCycleLabel("Думаю...");
+    try {
+      const response = await callAI(
+        "Ты дружелюбный AI-ассистент. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.",
+        text,
+        (chars) => setCycleLabel(`Думаю... ${chars} симв.`)
+      );
+      setCycleStatus("done");
+      setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response }]);
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
+    }
+  }, [settings]);
+
+  const handleSend = useCallback(async (text: string, mode: ChatMode = "site") => {
+    abortRef.current = false;
     const userMsg: Message = { id: ++msgCounter, role: "user", text };
     setMessages(prev => [...prev, userMsg]);
     setDeployResult(null);
+
+    if (mode === "chat") {
+      await handleSendChat(text);
+      return;
+    }
+
+    if (mode === "image") {
+      await handleSendImage(text);
+      return;
+    }
+
+    // ── Режим "site" ───────────────────────────────────────────────────────
+    if (!settings.apiKey) { setSettingsOpen(true); return; }
 
     try {
       // ── Шаг 1: читаем текущий код ─────────────────────────────────────────
       let currentHtml = "";
       let systemPrompt = CREATE_SYSTEM_PROMPT;
 
-      // Приоритет: локально загруженный файл → GitHub
       if (fullCodeContext) {
         currentHtml = fullCodeContext.html;
         systemPrompt = LOCAL_FILE_EDIT_PROMPT(currentHtml, fullCodeContext.fileName);
@@ -472,15 +535,12 @@ export default function LumenApp() {
 
       if (abortRef.current) return;
 
-      // ── Шаг 1.5: если просят картинки — генерируем их заранее ────────────
+      // ── Шаг 1.5: генерируем картинки если просят ─────────────────────────
       let enrichedText = text;
-      const IMAGE_GENERATE_URL = "https://functions.poehali.dev/0f178db7-a08a-4911-8f10-5f45a0d585a3";
       const wantsImages = /картинк|фото|изображени|image|photo|picture|товар.*фото|фото.*товар/i.test(text);
       if (wantsImages) {
         setCycleStatus("generating");
         setCycleLabel("Генерирую картинки...");
-
-        // Просим AI придумать 3 описания картинок для данного запроса
         const imgPromptsRaw = await callAI(
           "Ты помощник. Пользователь просит создать сайт. Придумай ровно 3 коротких описания картинок на английском для этого сайта. Верни ТОЛЬКО JSON массив строк, например: [\"prompt1\",\"prompt2\",\"prompt3\"]. Без пояснений.",
           text
@@ -515,7 +575,7 @@ export default function LumenApp() {
 
       if (abortRef.current) return;
 
-      // ── Шаг 2: генерируем правки ──────────────────────────────────────────
+      // ── Шаг 2: генерируем HTML ────────────────────────────────────────────
       setCycleStatus("generating");
       setCycleLabel("Генерирую...");
 
@@ -578,7 +638,7 @@ export default function LumenApp() {
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath]);
+  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath, fullCodeContext, liveUrl, handleSendChat, handleSendImage]);
 
   const handleApply = useCallback(async (msgId: number, html: string) => {
     if (!ghSettings.token) { setSettingsOpen(true); return; }
