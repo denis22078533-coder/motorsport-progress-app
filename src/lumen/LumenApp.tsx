@@ -391,9 +391,26 @@ export default function LumenApp() {
     const blob = new Blob([previewHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "lumen-site.html"; a.click();
+    a.href = url;
+    a.download = fullCodeContext?.fileName || "lumen-site.html";
+    a.click();
     URL.revokeObjectURL(url);
   };
+
+  const handleApplyToGitHub = useCallback(async () => {
+    if (!ghSettings.token || !ghSettings.repo) {
+      setSettingsOpen(true);
+      throw new Error("GitHub не настроен. Откройте настройки.");
+    }
+    if (!previewHtml) throw new Error("Нет кода для сохранения.");
+    const filePath = currentFilePath || (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
+    const result = await pushToGitHub(previewHtml, currentFileSha, filePath);
+    if (!result.ok) throw new Error(result.message || "Ошибка сохранения");
+    try {
+      const fresh = await fetchFromGitHub();
+      if (fresh.ok) { setCurrentFileSha(fresh.sha); setCurrentFilePath(fresh.filePath); }
+    } catch (_e) { /* не критично */ }
+  }, [ghSettings, previewHtml, currentFilePath, currentFileSha, pushToGitHub, fetchFromGitHub]);
 
   const handleSaveSettings = (s: Settings) => {
     setSettings(s);
@@ -503,7 +520,13 @@ export default function LumenApp() {
             </div>
 
             <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
-              <LivePreview status={topStatus} previewHtml={previewHtml} />
+              <LivePreview
+                status={topStatus}
+                previewHtml={previewHtml}
+                liveUrl={liveUrl}
+                onApplyToGitHub={ghSettings.token && ghSettings.repo ? handleApplyToGitHub : undefined}
+                onDownload={previewHtml ? handleExport : undefined}
+              />
             </div>
           </div>
 

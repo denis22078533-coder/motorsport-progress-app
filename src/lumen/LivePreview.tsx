@@ -1,130 +1,235 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Icon from "@/components/ui/icon";
 
 interface Props {
   status: "idle" | "generating" | "done" | "error";
   previewHtml: string | null;
+  liveUrl?: string;
+  onApplyToGitHub?: () => Promise<void>;
+  onDownload?: () => void;
 }
 
 const GRID_SIZE = 32;
 
-export default function LivePreview({ status, previewHtml }: Props) {
+export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onDownload }: Props) {
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleApply = async () => {
+    if (!onApplyToGitHub || applying) return;
+    setApplying(true);
+    setApplyResult(null);
+    try {
+      await onApplyToGitHub();
+      setApplyResult({ ok: true, message: "Сайт успешно обновлён!" });
+    } catch (e) {
+      setApplyResult({ ok: false, message: e instanceof Error ? e.message : "Ошибка сохранения" });
+    } finally {
+      setApplying(false);
+      setTimeout(() => setApplyResult(null), 5000);
+    }
+  };
+
+  const hasPreview = !!previewHtml;
+
   return (
-    <div className="relative flex-1 w-full h-full min-w-0 min-h-0 overflow-hidden bg-[#07070c]">
-      {/* Grid background */}
-      <div
-        className="absolute inset-0 opacity-[0.25]"
-        style={{
-          backgroundImage: `
-            linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)
-          `,
-          backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
-        }}
-      />
+    <div className="relative flex-1 w-full h-full min-w-0 min-h-0 overflow-hidden bg-[#07070c] flex flex-col">
 
-      {/* Radial vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,transparent_40%,#07070c_100%)] pointer-events-none" />
-
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        {/* IDLE */}
-        {status === "idle" && !previewHtml && (
+      {/* Action Bar — показываем только когда есть превью */}
+      <AnimatePresence>
+        {hasPreview && (
           <motion.div
-            key="idle"
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="shrink-0 z-10 flex items-center gap-2 px-3 py-2 bg-[#0d0d18]/95 border-b border-white/[0.07] backdrop-blur-sm"
           >
-            <motion.div
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-700/30 border border-violet-500/20 flex items-center justify-center"
-            >
-              <Icon name="Sparkles" size={22} className="text-violet-400" />
-            </motion.div>
-            <div>
-              <p className="text-white/80 text-sm font-medium leading-snug max-w-xs">
-                Опишите ваш проект —<br />
-                <span className="text-violet-400">магия начнётся здесь</span>
-              </p>
-              <p className="text-white/25 text-xs mt-2">
-                Сайт появится в этой области
-              </p>
-            </div>
+            {/* Применить в GitHub */}
+            {onApplyToGitHub && (
+              <button
+                onClick={handleApply}
+                disabled={applying}
+                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
+                  applying
+                    ? "bg-[#9333ea]/20 border border-[#9333ea]/30 text-purple-400/60 cursor-wait"
+                    : "bg-[#9333ea]/20 border border-[#9333ea]/40 hover:bg-[#9333ea]/35 hover:border-[#9333ea]/60 text-purple-300 hover:text-white"
+                }`}
+              >
+                <Icon name={applying ? "Loader" : "Upload"} size={11} className={applying ? "animate-spin" : ""} />
+                {applying ? "Сохраняю..." : "Применить изменения"}
+              </button>
+            )}
 
-            <div className="absolute top-4 left-4 w-5 h-5 border-l border-t border-white/10 rounded-tl-sm" />
-            <div className="absolute top-4 right-4 w-5 h-5 border-r border-t border-white/10 rounded-tr-sm" />
-            <div className="absolute bottom-4 left-4 w-5 h-5 border-l border-b border-white/10 rounded-bl-sm" />
-            <div className="absolute bottom-4 right-4 w-5 h-5 border-r border-b border-white/10 rounded-br-sm" />
-          </motion.div>
-        )}
+            {/* Скачать */}
+            {onDownload && (
+              <button
+                onClick={onDownload}
+                className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold bg-white/[0.05] border border-white/[0.09] hover:bg-white/[0.10] hover:border-white/20 text-white/50 hover:text-white/80 transition-all"
+              >
+                <Icon name="Download" size={11} />
+                Скачать .html
+              </button>
+            )}
 
-        {/* GENERATING */}
-        {status === "generating" && (
-          <motion.div
-            key="generating"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-4"
-          >
-            <motion.div
-              className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-400/60 to-transparent"
-              animate={{ top: ["10%", "90%", "10%"] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-            />
-            <div className="relative">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
-                className="w-10 h-10 rounded-full border-2 border-transparent border-t-violet-400 border-r-violet-400/30"
-              />
-            </div>
-            <div className="text-center">
-              <p className="text-violet-400 text-sm font-semibold">Генерирую сайт</p>
-              <GeneratingDots />
-            </div>
-          </motion.div>
-        )}
+            {/* Живая ссылка */}
+            {liveUrl && (
+              <a
+                href={liveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:text-emerald-300 transition-all ml-auto"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                {liveUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                <Icon name="ExternalLink" size={10} />
+              </a>
+            )}
 
-        {/* DONE — iframe */}
-        {(status === "done" || (previewHtml && status !== "generating")) && previewHtml && (
-          <motion.div
-            key="preview"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="absolute inset-0"
-          >
-            <iframe
-              srcDoc={previewHtml}
-              className="w-full h-full border-0"
-              title="Preview"
-              sandbox="allow-scripts"
-            />
-          </motion.div>
-        )}
-
-        {/* ERROR */}
-        {status === "error" && (
-          <motion.div
-            key="error"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-          >
-            <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-              <Icon name="AlertTriangle" size={22} className="text-red-400" />
-            </div>
-            <p className="text-red-400 text-sm font-medium">Ошибка генерации</p>
-            <p className="text-white/30 text-xs">Проверьте API ключ в настройках</p>
+            {/* Статус уведомление */}
+            <AnimatePresence>
+              {applyResult && (
+                <motion.span
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  className={`text-[11px] font-semibold ${applyResult.ok ? "text-emerald-400" : "text-red-400"} ${liveUrl ? "" : "ml-auto"}`}
+                >
+                  {applyResult.ok ? "✓ " : "✕ "}{applyResult.message}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Preview area */}
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        {/* Grid background */}
+        <div
+          className="absolute inset-0 opacity-[0.25]"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)
+            `,
+            backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+          }}
+        />
+
+        {/* Radial vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,transparent_40%,#07070c_100%)] pointer-events-none" />
+
+        {/* Content */}
+        <AnimatePresence mode="wait">
+          {/* IDLE */}
+          {status === "idle" && !previewHtml && (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center"
+            >
+              <motion.div
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-700/30 border border-violet-500/20 flex items-center justify-center"
+              >
+                <Icon name="Sparkles" size={22} className="text-violet-400" />
+              </motion.div>
+              <div>
+                <p className="text-white/80 text-sm font-medium leading-snug max-w-xs">
+                  Опишите ваш проект —<br />
+                  <span className="text-violet-400">магия начнётся здесь</span>
+                </p>
+                <p className="text-white/25 text-xs mt-2">
+                  Сайт появится в этой области
+                </p>
+              </div>
+
+              <div className="absolute top-4 left-4 w-5 h-5 border-l border-t border-white/10 rounded-tl-sm" />
+              <div className="absolute top-4 right-4 w-5 h-5 border-r border-t border-white/10 rounded-tr-sm" />
+              <div className="absolute bottom-4 left-4 w-5 h-5 border-l border-b border-white/10 rounded-bl-sm" />
+              <div className="absolute bottom-4 right-4 w-5 h-5 border-r border-b border-white/10 rounded-br-sm" />
+            </motion.div>
+          )}
+
+          {/* GENERATING */}
+          {status === "generating" && (
+            <motion.div
+              key="generating"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+            >
+              {/* Scanning line over existing preview */}
+              {previewHtml && (
+                <iframe
+                  srcDoc={previewHtml}
+                  className="absolute inset-0 w-full h-full border-0 opacity-30"
+                  title="Preview (background)"
+                  sandbox="allow-scripts"
+                />
+              )}
+              <motion.div
+                className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-400/60 to-transparent"
+                animate={{ top: ["10%", "90%", "10%"] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+              />
+              <div className="relative">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                  className="w-10 h-10 rounded-full border-2 border-transparent border-t-violet-400 border-r-violet-400/30"
+                />
+              </div>
+              <div className="text-center">
+                <p className="text-violet-400 text-sm font-semibold">Генерирую сайт</p>
+                <GeneratingDots />
+              </div>
+            </motion.div>
+          )}
+
+          {/* DONE — iframe */}
+          {(status === "done" || (previewHtml && status !== "generating")) && previewHtml && (
+            <motion.div
+              key="preview"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="absolute inset-0"
+            >
+              <iframe
+                srcDoc={previewHtml}
+                className="w-full h-full border-0"
+                title="Preview"
+                sandbox="allow-scripts"
+              />
+            </motion.div>
+          )}
+
+          {/* ERROR */}
+          {status === "error" && !previewHtml && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+            >
+              <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <Icon name="AlertTriangle" size={22} className="text-red-400" />
+              </div>
+              <p className="text-red-400 text-sm font-medium">Ошибка генерации</p>
+              <p className="text-white/30 text-xs">Проверьте API ключ в настройках</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
