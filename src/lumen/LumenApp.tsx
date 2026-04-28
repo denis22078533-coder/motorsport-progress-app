@@ -1,30 +1,21 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import LumenTopBar from "./LumenTopBar";
+import LivePreview from "./LivePreview";
 import ChatPanel from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
 import LumenLoginPage from "./LumenLoginPage";
-import WidgetZone from "./WidgetZone";
 import { useLumenAuth } from "./useLumenAuth";
 import { useGitHub } from "./useGitHub";
 
 type CycleStatus = "idle" | "reading" | "generating" | "done" | "error";
+type MobileTab = "chat" | "preview";
 
 export interface Message {
   id: number;
   role: "user" | "assistant";
   text: string;
   html?: string; // HTML-результат, который можно задеплоить
-}
-
-export interface Widget {
-  id: string;
-  kind: "button" | "image" | "text" | "icon" | "card";
-  label?: string;
-  icon?: string;
-  imageUrl?: string;
-  action?: string;
-  color?: string;
 }
 
 interface Settings {
@@ -44,63 +35,53 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 
-const ACTIONS_SYSTEM_PROMPT = (state: { theme: Record<string, string>; widgets: Widget[] }) =>
-  `Ты — управляющий интерфейсом Lumen. Получаешь команду пользователя и возвращаешь СТРОГО валидный JSON со списком действий, которые Lumen применит к самому себе. Без markdown, без объяснений.
+const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ без единого слова объяснений и без markdown-блоков.
 
-Формат:
-{
-  "actions": [ ... ],
-  "comment": "Короткая фраза по-русски о том, что сделано"
-}
+ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА — нарушение недопустимо:
 
-ДОСТУПНЫЕ ACTIONS:
+1. СТРУКТУРА ДОКУМЕНТА:
+   - Начинай строго с <!DOCTYPE html>, заканчивай </html>
+   - Все пути к ресурсам — ТОЛЬКО относительные: assets/... (без ведущего слэша)
+   - Кодировка: <meta charset="UTF-8">
+   - Viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-1. setTheme — меняет цвета интерфейса
-   { "type": "setTheme", "theme": { "bg": "#fff", "accent": "#10b981", "text": "#000", "panel": "...", "accentHover": "...", "textMuted": "...", "border": "..." } }
-   Указывай только те поля, что меняешь. Контраст обязателен.
+2. TAILWIND CSS — подключай ВСЕГДА первым в <head>:
+   <script src="https://cdn.tailwindcss.com"></script>
+   После него конфигурируй через <script>tailwind.config = { ... }</script> если нужны кастомные цвета.
 
-2. addWidget — добавляет элемент в зону виджетов Lumen
-   { "type": "addWidget", "widget": {
-       "id": "уникальный-id",
-       "kind": "button" | "image" | "text" | "icon" | "card",
-       "label": "Текст (для button/text/card)",
-       "icon": "имя-lucide-иконки (Mic, Heart, Star...) — для button/icon/card",
-       "imageUrl": "URL картинки — для image",
-       "action": "alert:текст" | "open:https://..." | "voice" | "copy:текст" | "none",
-       "color": "hex-цвет (опционально)"
-     } }
+3. LUCIDE ICONS — подключай ВСЕГДА:
+   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+   Использование иконок: <i data-lucide="имя-иконки"></i>
+   В конце <body> вызывай: <script>lucide.createIcons();</script>
 
-3. removeWidget — удаляет виджет по id
-   { "type": "removeWidget", "id": "..." }
+4. ДИЗАЙН — строго тёмный glassmorphism:
+   - Фон: тёмный градиент (slate-900, gray-950, black)
+   - Карточки: backdrop-blur-xl, bg-white/5, border border-white/10, rounded-2xl
+   - Текст: белый/серый (text-white, text-gray-300, text-gray-400)
+   - Акценты: фиолетовый/индиго/циан (violet-500, indigo-400, cyan-400)
+   - Кнопки: градиентные bg-gradient-to-r, с hover-эффектами и transition
+   - Тени: shadow-2xl, drop-shadow с цветными glow-эффектами
 
-4. updateWidget — меняет существующий виджет
-   { "type": "updateWidget", "id": "...", "patch": { "label": "...", "icon": "...", "color": "..." } }
+5. НИКАКИХ внешних изображений (img src с http). Только SVG-иконки через Lucide или CSS-фигуры.
 
-5. clearWidgets — удаляет все виджеты
-   { "type": "clearWidgets" }
+6. Адаптивность обязательна (mobile-first через Tailwind breakpoints).`;
 
-6. setPlaceholder — меняет плейсхолдер поля ввода
-   { "type": "setPlaceholder", "text": "..." }
+const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
+  `Ты — хирургический редактор HTML. Твоя задача — внести ТОЛЬКО запрошенное изменение, сохранив весь остальной код в первозданном виде.
 
-7. setLogo — меняет букву/эмодзи в логотипе Lumen
-   { "type": "setLogo", "text": "L" }
+ЖЁСТКИЕ ПРАВИЛА — нарушение недопустимо:
 
-8. notify — показать всплывающее сообщение
-   { "type": "notify", "text": "...", "level": "info" | "success" | "error" }
+1. Верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...), без объяснений, без markdown.
+2. ЗАПРЕЩЕНО удалять, переименовывать или переписывать любые классы, стили, анимации, цвета, шрифты, отступы — если пользователь об этом не просил.
+3. ЗАПРЕЩЕНО менять подключённые CDN (Tailwind, Lucide, шрифты, скрипты) — они должны остаться точно такими же.
+4. ЗАПРЕЩЕНО изменять структуру секций, порядок блоков, атрибуты id/class — если пользователь об этом не просил.
+5. Меняй строго и только то, что описано в запросе пользователя. Всё остальное — скопируй без изменения символа.
+6. Все пути к ресурсам — относительные (assets/..., без ведущего слэша).
+7. Если запрос неоднозначен — делай минимальное изменение, а не максимальное.
 
-ПРАВИЛА:
-- Возвращай минимум нужных действий. Не ломай существующее без необходимости.
-- icon: только реальные имена иконок lucide-react в PascalCase (Mic, Phone, Heart, Star, Bell, Camera, Image, Send и т.п.).
-- Если просят "добавь кнопку ввода голосом" → addWidget с kind:"button", icon:"Mic", label:"Голосовой ввод", action:"voice".
-- Если просят "добавь фото X" → addWidget с kind:"image", imageUrl: подходящий URL (можно использовать https://images.unsplash.com/photo-... или https://picsum.photos/seed/КЛЮЧ/600/400).
-- Если просят "добавь иконку сердце" → addWidget с kind:"icon", icon:"Heart".
-- Если просят "удали кнопку голос" — removeWidget с id виджета голоса (смотри текущий список).
-- Если просят "перепиши текст подсказки на ..." — setPlaceholder.
-- Если просят "проанализируй дизайн" — верни actions:[] и в comment напиши анализ (2-4 предложения).
-- comment всегда — краткое русское описание выполненного.
-
-ТЕКУЩЕЕ СОСТОЯНИЕ:
-${JSON.stringify(state, null, 2)}`;
+--- ТЕКУЩИЙ КОД САЙТА (сохрани его полностью, правь только нужное) ---
+${currentHtml}
+--- КОНЕЦ КОДА ---`;
 
 
 
@@ -108,13 +89,24 @@ let msgCounter = 0;
 
 export default function LumenApp() {
   const { authed, login, logout } = useLumenAuth();
-  const { ghSettings, saveGhSettings } = useGitHub();
+  const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub } = useGitHub();
+
+  const liveUrl = (() => {
+    const [user, repo] = (ghSettings.repo || "").split("/");
+    return user && repo ? `https://${user}.github.io/${repo}/` : "";
+  })();
 
   const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+  const [deployingId, setDeployingId] = useState<number | null>(null);
   const [deployResult, setDeployResult] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+  const [currentFileSha, setCurrentFileSha] = useState<string>("");
+  const [currentFilePath, setCurrentFilePath] = useState<string>("");
+  const [loadingFromGitHub, setLoadingFromGitHub] = useState(false);
 
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -123,116 +115,14 @@ export default function LumenApp() {
     } catch { return DEFAULT_SETTINGS; }
   });
 
-  const DEFAULT_THEME: Record<string, string> = {
-    bg: "#0a0a0f",
-    panel: "#111118",
-    accent: "#9333ea",
-    accentHover: "#7e22ce",
-    text: "#ffffff",
-    textMuted: "rgba(255,255,255,0.6)",
-    border: "rgba(255,255,255,0.08)",
-  };
-
-  const [theme, setTheme] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem("lumen_theme");
-      return saved ? { ...DEFAULT_THEME, ...JSON.parse(saved) } : DEFAULT_THEME;
-    } catch { return DEFAULT_THEME; }
-  });
-
-  const [widgets, setWidgets] = useState<Widget[]>(() => {
-    try { return JSON.parse(localStorage.getItem("lumen_widgets") || "[]"); }
-    catch { return []; }
-  });
-  const [placeholder, setPlaceholder] = useState<string>(() =>
-    localStorage.getItem("lumen_placeholder") || "");
-  const [logoText, setLogoText] = useState<string>(() =>
-    localStorage.getItem("lumen_logo") || "L");
-  const [toast, setToast] = useState<{ text: string; level: "info" | "success" | "error" } | null>(null);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    Object.entries(theme).forEach(([k, v]) => {
-      root.style.setProperty(`--lumen-${k}`, v);
-    });
-    try { localStorage.setItem("lumen_theme", JSON.stringify(theme)); } catch (_e) { /* ignore */ }
-  }, [theme]);
-
-  useEffect(() => {
-    try { localStorage.setItem("lumen_widgets", JSON.stringify(widgets)); } catch (_e) { /* ignore */ }
-  }, [widgets]);
-  useEffect(() => { localStorage.setItem("lumen_placeholder", placeholder); }, [placeholder]);
-  useEffect(() => { localStorage.setItem("lumen_logo", logoText); }, [logoText]);
-
-  const handleWidgetAction = useCallback((action?: string) => {
-    if (!action || action === "none") return;
-    if (action === "voice") {
-      const W = window as unknown as { webkitSpeechRecognition?: new () => unknown; SpeechRecognition?: new () => unknown };
-      const SR = W.SpeechRecognition || W.webkitSpeechRecognition;
-      if (!SR) { setToast({ text: "Голосовой ввод не поддерживается браузером", level: "error" }); return; }
-      try {
-        const rec = new (SR as new () => { lang: string; onresult: (e: { results: { 0: { 0: { transcript: string } } }[] }) => void; onerror: () => void; start: () => void }) ();
-        rec.lang = "ru-RU";
-        rec.onresult = (e) => {
-          const txt = e.results[0][0].transcript;
-          setToast({ text: `Распознано: ${txt}`, level: "success" });
-        };
-        rec.onerror = () => setToast({ text: "Ошибка распознавания", level: "error" });
-        rec.start();
-        setToast({ text: "Слушаю...", level: "info" });
-      } catch {
-        setToast({ text: "Не удалось запустить микрофон", level: "error" });
-      }
-      return;
-    }
-    if (action.startsWith("alert:")) { setToast({ text: action.slice(6), level: "info" }); return; }
-    if (action.startsWith("open:")) { window.open(action.slice(5), "_blank"); return; }
-    if (action.startsWith("copy:")) {
-      navigator.clipboard?.writeText(action.slice(5));
-      setToast({ text: "Скопировано", level: "success" });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const applyActions = useCallback((actions: Array<Record<string, unknown>>) => {
-    actions.forEach((a) => {
-      const type = a.type as string;
-      if (type === "setTheme" && a.theme && typeof a.theme === "object") {
-        const t = a.theme as Record<string, string>;
-        setTheme((prev) => {
-          const next = { ...prev };
-          ["bg", "panel", "accent", "accentHover", "text", "textMuted", "border"].forEach((k) => {
-            if (t[k] && typeof t[k] === "string") next[k] = t[k];
-          });
-          return next;
-        });
-      } else if (type === "addWidget" && a.widget) {
-        const w = a.widget as Widget;
-        if (!w.id) w.id = `w_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        setWidgets((prev) => [...prev.filter((x) => x.id !== w.id), w]);
-      } else if (type === "removeWidget" && typeof a.id === "string") {
-        setWidgets((prev) => prev.filter((x) => x.id !== a.id));
-      } else if (type === "updateWidget" && typeof a.id === "string" && a.patch) {
-        const patch = a.patch as Partial<Widget>;
-        setWidgets((prev) => prev.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
-      } else if (type === "clearWidgets") {
-        setWidgets([]);
-      } else if (type === "setPlaceholder" && typeof a.text === "string") {
-        setPlaceholder(a.text);
-      } else if (type === "setLogo" && typeof a.text === "string") {
-        setLogoText(a.text.slice(0, 4));
-      } else if (type === "notify" && typeof a.text === "string") {
-        setToast({ text: a.text, level: (a.level as "info" | "success" | "error") || "info" });
-      }
-    });
-  }, []);
-
   const abortRef = useRef(false);
+
+  const extractHtml = (raw: string): string => {
+    const mdMatch = raw.match(/```html\s*\n([\s\S]*?)```/i) || raw.match(/```\s*\n([\s\S]*?)```/);
+    if (mdMatch) raw = mdMatch[1].trim();
+    const tagMatch = raw.match(/(<!DOCTYPE[\s\S]*)/i) || raw.match(/(<html[\s\S]*)/i);
+    return tagMatch ? tagMatch[1].trim() : raw.trim();
+  };
 
   const callAI = async (systemPrompt: string, userText: string): Promise<string> => {
     const rawBase = (settings.baseUrl || "").trim().replace(/\/+$/, "");
@@ -293,15 +183,6 @@ export default function LumenApp() {
     }
   };
 
-  const extractJson = (raw: string): Record<string, string> => {
-    const md = raw.match(/```json\s*\n([\s\S]*?)```/i) || raw.match(/```\s*\n([\s\S]*?)```/);
-    const txt = md ? md[1].trim() : raw.trim();
-    const start = txt.indexOf("{");
-    const end = txt.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("Модель не вернула JSON");
-    return JSON.parse(txt.slice(start, end + 1));
-  };
-
   const handleSend = useCallback(async (text: string) => {
     if (!settings.apiKey) { setSettingsOpen(true); return; }
     abortRef.current = false;
@@ -311,27 +192,75 @@ export default function LumenApp() {
     setDeployResult(null);
 
     try {
-      setCycleStatus("generating");
-      setCycleLabel("Думаю...");
+      // ── Шаг 1: читаем текущий код из GitHub ──────────────────────────────
+      let currentHtml = "";
+      let systemPrompt = CREATE_SYSTEM_PROMPT;
 
-      const rawResponse = await callAI(ACTIONS_SYSTEM_PROMPT({ theme, widgets }), text);
+      if (ghSettings.token && ghSettings.repo) {
+        setCycleStatus("reading");
+        const filePath = (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
+        setCycleLabel(`Читаю ${filePath} из GitHub...`);
+        const fetched = await fetchFromGitHub();
+        if (fetched.ok && fetched.html) {
+          currentHtml = fetched.html;
+          setCurrentFileSha(fetched.sha);
+          setCurrentFilePath(fetched.filePath);
+          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml);
+        }
+      }
 
       if (abortRef.current) return;
 
-      const parsed = extractJson(rawResponse) as unknown as { actions?: Array<Record<string, unknown>>; comment?: string };
-      const actions = Array.isArray(parsed.actions) ? parsed.actions : [];
-      const comment = (parsed.comment || "").toString();
+      // ── Шаг 2: генерируем правки ──────────────────────────────────────────
+      setCycleStatus("generating");
+      setCycleLabel("Генерирую правки...");
 
-      applyActions(actions);
+      const rawResponse = await callAI(systemPrompt, text);
+      const cleanHtml = extractHtml(rawResponse);
 
-      setCycleStatus("done");
-      setCycleLabel("");
+      if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
+        throw new Error(`Модель вернула не HTML: "${cleanHtml.slice(0, 200)}". Попробуйте ещё раз.`);
+      }
 
+      if (abortRef.current) return;
+
+      setPreviewHtml(cleanHtml);
+      setMobileTab("preview");
+
+      const assistantId = ++msgCounter;
       setMessages(prev => [...prev, {
-        id: ++msgCounter,
+        id: assistantId,
         role: "assistant",
-        text: comment || (actions.length ? `Готово! Применено действий: ${actions.length}` : "Готово!"),
+        text: currentHtml
+          ? "Готово! Правки внесены. Загружаю в GitHub..."
+          : "Готово! Сайт создан. Загружаю в GitHub...",
+        html: cleanHtml,
       }]);
+
+      // ── Шаг 3: автодеплой в GitHub ───────────────────────────────────────
+      if (ghSettings.token && ghSettings.repo) {
+        setCycleLabel("Загружаю в GitHub...");
+        const filePath = currentFilePath || (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
+        const pushResult = await pushToGitHub(cleanHtml, "", filePath);
+
+        if (pushResult.ok) {
+          try {
+            const fresh = await fetchFromGitHub();
+            if (fresh.ok) {
+              setCurrentFileSha(fresh.sha);
+              setCurrentFilePath(fresh.filePath);
+            }
+          } catch (_e) { /* не критично */ }
+        }
+
+        setCycleStatus(pushResult.ok ? "done" : "error");
+        setCycleLabel("");
+        setDeployResult({ id: assistantId, ...pushResult });
+        setTimeout(() => setDeployResult(null), pushResult.ok ? 8000 : 30000);
+      } else {
+        setCycleStatus("done");
+        setCycleLabel("");
+      }
 
     } catch (err) {
       if (!abortRef.current) {
@@ -341,7 +270,36 @@ export default function LumenApp() {
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, theme, widgets, applyActions]);
+  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath]);
+
+  const handleApply = useCallback(async (msgId: number, html: string) => {
+    if (!ghSettings.token) { setSettingsOpen(true); return; }
+    setDeployingId(msgId);
+    setDeployResult(null);
+
+    const filePath = currentFilePath || (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
+    setCycleStatus("generating");
+    setCycleLabel(`Сохраняю ${filePath} в GitHub...`);
+
+    const result = await pushToGitHub(html, currentFileSha, filePath);
+
+    if (result.ok) {
+      // Обновляем sha после успешного пуша
+      try {
+        const fresh = await fetchFromGitHub();
+        if (fresh.ok) {
+          setCurrentFileSha(fresh.sha);
+          setCurrentFilePath(fresh.filePath);
+        }
+      } catch (_e) { /* не критично */ }
+    }
+
+    setCycleStatus(result.ok ? "done" : "error");
+    setCycleLabel("");
+    setDeployingId(null);
+    setDeployResult({ id: msgId, ...result });
+    setTimeout(() => setDeployResult(null), result.ok ? 6000 : 30000);
+  }, [ghSettings, pushToGitHub, fetchFromGitHub, currentFileSha, currentFilePath]);
 
   const handleStop = () => {
     abortRef.current = true;
@@ -349,19 +307,48 @@ export default function LumenApp() {
     setCycleLabel("");
   };
 
+  const handleLoadFromGitHub = useCallback(async () => {
+    if (!ghSettings.token || !ghSettings.repo) { setSettingsOpen(true); return; }
+    setLoadingFromGitHub(true);
+    const fetched = await fetchFromGitHub();
+    setLoadingFromGitHub(false);
+    if (fetched.ok && fetched.html) {
+      setCurrentFileSha(fetched.sha);
+      setCurrentFilePath(fetched.filePath);
+      setPreviewHtml(fetched.html);
+      setMobileTab("preview");
+      const id = ++msgCounter;
+      setMessages([{
+        id,
+        role: "assistant",
+        text: `Загружен файл «${fetched.filePath}». Вижу ваш сайт. Опишите, что нужно изменить — внесу правки бережно.`,
+      }]);
+    } else {
+      const id = ++msgCounter;
+      setMessages([{
+        id,
+        role: "assistant",
+        text: `Не удалось загрузить файл: ${fetched.message || "неизвестная ошибка"}. Проверьте настройки GitHub.`,
+      }]);
+    }
+  }, [ghSettings, fetchFromGitHub]);
+
   const handleNewProject = () => {
     setMessages([]);
+    setPreviewHtml(null);
     setCycleStatus("idle");
     setCycleLabel("");
+    setMobileTab("chat");
     setDeployResult(null);
   };
 
-  const handleResetTheme = () => {
-    setTheme(DEFAULT_THEME);
-    setWidgets([]);
-    setPlaceholder("");
-    setLogoText("L");
-    setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Lumen сброшен к стандартному виду." }]);
+  const handleExport = () => {
+    if (!previewHtml) return;
+    const blob = new Blob([previewHtml], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "lumen-site.html"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleSaveSettings = (s: Settings) => {
@@ -385,57 +372,69 @@ export default function LumenApp() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="h-dvh flex flex-col overflow-hidden"
-          style={{ maxWidth: "100vw", background: "var(--lumen-bg, #07070c)" }}
+          className="h-dvh flex flex-col bg-[#07070c] overflow-hidden"
+          style={{ maxWidth: "100vw" }}
         >
           <LumenTopBar
             status={topStatus}
             cycleLabel={cycleLabel}
-            logoText={logoText}
             onNewProject={handleNewProject}
-            onResetTheme={handleResetTheme}
+            onExport={handleExport}
             onSettings={() => setSettingsOpen(true)}
             onLogout={logout}
           />
 
-          <WidgetZone
-            widgets={widgets}
-            onAction={handleWidgetAction}
-            onRemove={(id) => setWidgets((prev) => prev.filter((w) => w.id !== id))}
-          />
+          {/* File context banner */}
+          {currentFilePath && (
+            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-[#9333ea]/20 text-xs">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-white/40">Редактируется:</span>
+              <span className="text-emerald-400 font-mono font-medium">{currentFilePath}</span>
+              <span className="text-white/20 ml-auto font-mono">{ghSettings.repo}</span>
+            </div>
+          )}
 
-          {/* Main content — only chat */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <ChatPanel
-              status={cycleStatus}
-              cycleLabel={cycleLabel}
-              messages={messages}
-              onSend={handleSend}
-              onStop={handleStop}
-              deployResult={deployResult}
-              placeholder={placeholder}
-            />
+          {/* Mobile tab switcher */}
+          <div className="md:hidden flex shrink-0 border-b border-white/[0.06] bg-[#0a0a0f]">
+            {(["chat", "preview"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMobileTab(tab)}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                  mobileTab === tab
+                    ? "text-[#9333ea] border-b-2 border-[#9333ea]"
+                    : "text-white/40 border-b-2 border-transparent"
+                }`}
+              >
+                {tab === "chat" ? <><span>💬</span> Чат</> : <><span>🖥️</span> Сайт</>}
+              </button>
+            ))}
           </div>
 
-          {/* Toast */}
-          <AnimatePresence>
-            {toast && (
-              <motion.div
-                key="toast"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl text-xs font-medium shadow-2xl border max-w-[90vw]"
-                style={{
-                  background: toast.level === "error" ? "rgba(239,68,68,0.95)" : toast.level === "success" ? "rgba(16,185,129,0.95)" : "var(--lumen-panel, rgba(0,0,0,0.9))",
-                  borderColor: "var(--lumen-border, rgba(255,255,255,0.1))",
-                  color: "#fff",
-                }}
-              >
-                {toast.text}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Main content */}
+          <div className="flex-1 min-h-0 overflow-hidden md:flex md:gap-2 md:p-2">
+            <div className={`flex flex-col h-full md:w-[420px] md:flex-none ${mobileTab === "chat" ? "flex" : "hidden md:flex"}`}>
+              <ChatPanel
+                status={cycleStatus}
+                cycleLabel={cycleLabel}
+                messages={messages}
+                onSend={handleSend}
+                onStop={handleStop}
+                onApply={handleApply}
+                deployingId={deployingId}
+                deployResult={deployResult}
+                liveUrl={liveUrl}
+                onOpenPreview={() => setMobileTab("preview")}
+                onLoadFromGitHub={handleLoadFromGitHub}
+                loadingFromGitHub={loadingFromGitHub}
+                currentFilePath={ghSettings.filePath || "index.html"}
+              />
+            </div>
+
+            <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
+              <LivePreview status={topStatus} previewHtml={previewHtml} />
+            </div>
+          </div>
 
           <SettingsDrawer
             open={settingsOpen}
