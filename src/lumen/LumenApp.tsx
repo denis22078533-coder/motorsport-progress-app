@@ -472,11 +472,54 @@ export default function LumenApp() {
 
       if (abortRef.current) return;
 
+      // ── Шаг 1.5: если просят картинки — генерируем их заранее ────────────
+      let enrichedText = text;
+      const IMAGE_GENERATE_URL = "https://functions.poehali.dev/0f178db7-a08a-4911-8f10-5f45a0d585a3";
+      const wantsImages = /картинк|фото|изображени|image|photo|picture|товар.*фото|фото.*товар/i.test(text);
+      if (wantsImages) {
+        setCycleStatus("generating");
+        setCycleLabel("Генерирую картинки...");
+
+        // Просим AI придумать 3 описания картинок для данного запроса
+        const imgPromptsRaw = await callAI(
+          "Ты помощник. Пользователь просит создать сайт. Придумай ровно 3 коротких описания картинок на английском для этого сайта. Верни ТОЛЬКО JSON массив строк, например: [\"prompt1\",\"prompt2\",\"prompt3\"]. Без пояснений.",
+          text
+        );
+        let imgPrompts: string[] = [];
+        try {
+          const match = imgPromptsRaw.match(/\[[\s\S]*?\]/);
+          if (match) imgPrompts = JSON.parse(match[0]);
+        } catch { imgPrompts = []; }
+
+        if (imgPrompts.length > 0) {
+          const generatedUrls: string[] = [];
+          for (let i = 0; i < imgPrompts.length; i++) {
+            if (abortRef.current) return;
+            setCycleLabel(`Генерирую картинку ${i + 1}/${imgPrompts.length}...`);
+            try {
+              const r = await fetch(IMAGE_GENERATE_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: imgPrompts[i] }),
+              });
+              const d = await r.json();
+              if (d.url) generatedUrls.push(d.url);
+            } catch { /* продолжаем без этой картинки */ }
+          }
+          if (generatedUrls.length > 0) {
+            const urlList = generatedUrls.map((u, i) => `Картинка ${i + 1}: ${u}`).join("\n");
+            enrichedText = `${text}\n\nИСПОЛЬЗУЙ ЭТИ ГОТОВЫЕ URL КАРТИНОК (вставь их в <img src="...">):\n${urlList}`;
+          }
+        }
+      }
+
+      if (abortRef.current) return;
+
       // ── Шаг 2: генерируем правки ──────────────────────────────────────────
       setCycleStatus("generating");
       setCycleLabel("Генерирую...");
 
-      const rawResponse = await callAI(systemPrompt, text, (chars) => {
+      const rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
         setCycleLabel(`Генерирую... ${chars} симв.`);
       });
       const cleanHtml = extractHtml(rawResponse);
