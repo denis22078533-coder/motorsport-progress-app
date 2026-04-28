@@ -25,51 +25,37 @@ interface Props {
   localFileName?: string;
 }
 
-const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
-  { key: "reading",    label: "Читаю текущий код...",    icon: "Download"  },
-  { key: "generating", label: "Генерирую правки...",      icon: "Sparkles"  },
+const SUGGESTIONS = [
+  { text: "Сайт кофейни с меню и фотографиями", icon: "Globe" },
+  { text: "Нарисуй красивый закат над морем", icon: "Image" },
+  { text: "Как сделать сайт заметным в Google?", icon: "MessageCircle" },
+  { text: "Лендинг для фитнес-клуба с тарифами", icon: "Globe" },
 ];
 
-const SUGGESTIONS: Record<ChatMode, string[]> = {
-  chat: [
-    "Что такое SEO и зачем он нужен?",
-    "Как увеличить продажи через сайт?",
-    "Объясни что такое лендинг",
-    "Какие цвета подходят для бизнес-сайта?",
-  ],
-  image: [
-    "Красивый офис с панорамными окнами",
-    "Команда профессионалов за работой",
-    "Современный ресторан с уютной атмосферой",
-    "Спортивный зал с современным оборудованием",
-  ],
-  site: [
-    "Лендинг для фитнес-клуба с тарифами",
-    "Портфолио дизайнера с галереей работ",
-    "Сайт кофейни с меню и адресом",
-    "Интернет-магазин одежды с каталогом",
-  ],
+function detectMode(text: string): ChatMode {
+  const t = text.toLowerCase();
+  const imageWords = /нарисуй|сгенери|сделай (фото|картин|изображен)|создай (фото|картин|изображен)|картин|фото природ|фото город|изображени|генер.*картин|photo|image of|draw|painting/i;
+  const siteWords = /сайт|лендинг|страниц|портфолио|интернет.магазин|визитк|html|создай сайт|сделай сайт|напиши сайт/i;
+  if (imageWords.test(t)) return "image";
+  if (siteWords.test(t)) return "site";
+  return "chat";
+}
+
+const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
+  { key: "reading",    label: "Читаю текущий код...", icon: "Download" },
+  { key: "generating", label: "Генерирую...",          icon: "Sparkles" },
+];
+
+const MODE_COLORS: Record<ChatMode, string> = {
+  chat:  "#3b82f6",
+  image: "#10b981",
+  site:  "#9333ea",
 };
 
-const MODE_CONFIG: Record<ChatMode, { label: string; icon: string; placeholder: string; color: string }> = {
-  chat: {
-    label: "Чат",
-    icon: "MessageCircle",
-    placeholder: "Задайте любой вопрос...",
-    color: "#3b82f6",
-  },
-  image: {
-    label: "Картинки",
-    icon: "Image",
-    placeholder: "Опишите картинку которую хотите создать...",
-    color: "#10b981",
-  },
-  site: {
-    label: "Сайт",
-    icon: "Globe",
-    placeholder: "Опишите сайт который хотите создать...",
-    color: "#9333ea",
-  },
+const MODE_LABELS: Record<ChatMode, { icon: string; text: string }> = {
+  chat:  { icon: "MessageCircle", text: "Отвечаю..." },
+  image: { icon: "Image",         text: "Рисую картинку..." },
+  site:  { icon: "Globe",         text: "Создаю сайт..." },
 };
 
 export default function ChatPanel({
@@ -80,7 +66,7 @@ export default function ChatPanel({
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
-  const [mode, setMode] = useState<ChatMode>("chat");
+  const [lastMode, setLastMode] = useState<ChatMode>("chat");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,10 +84,13 @@ export default function ChatPanel({
   }, [messages, status]);
 
   const isActive = status === "reading" || status === "generating";
-  const modeConfig = MODE_CONFIG[mode];
+  const detectedMode = value.trim() ? detectMode(value) : lastMode;
+  const activeColor = MODE_COLORS[detectedMode];
 
   const handleSend = () => {
     if (!value.trim() || isActive) return;
+    const mode = detectMode(value.trim());
+    setLastMode(mode);
     onSend(value.trim(), mode);
     setValue("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -117,6 +106,13 @@ export default function ChatPanel({
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
   };
 
+  // Показываем подсказку какой режим определён
+  const modeHint = value.trim() ? (
+    detectedMode === "image" ? "🎨 Создам картинку" :
+    detectedMode === "site"  ? "🌐 Создам сайт" :
+    "💬 Отвечу на вопрос"
+  ) : null;
+
   return (
     <div
       className="w-full h-full flex flex-col bg-[#0a0a0f] overflow-hidden"
@@ -124,39 +120,32 @@ export default function ChatPanel({
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
-        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: modeConfig.color }} />
+        <motion.div
+          className="w-1.5 h-1.5 rounded-full"
+          animate={{ backgroundColor: activeColor }}
+          transition={{ duration: 0.4 }}
+        />
         <span className="text-white/60 text-xs font-medium tracking-wide uppercase">AI Ассистент</span>
-      </div>
-
-      {/* Mode Switcher */}
-      <div className="px-3 py-2.5 border-b border-white/[0.06] shrink-0">
-        <div className="flex gap-1 p-1 bg-white/[0.04] rounded-xl">
-          {(Object.keys(MODE_CONFIG) as ChatMode[]).map((m) => {
-            const cfg = MODE_CONFIG[m];
-            const isSelected = mode === m;
-            return (
-              <motion.button
-                key={m}
-                onClick={() => setMode(m)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-[11px] font-semibold transition-all relative"
-                style={{
-                  color: isSelected ? cfg.color : "rgba(255,255,255,0.35)",
-                }}
-                whileTap={{ scale: 0.97 }}
-              >
-                {isSelected && (
-                  <motion.div
-                    layoutId="mode-bg"
-                    className="absolute inset-0 rounded-lg"
-                    style={{ backgroundColor: cfg.color + "20", border: `1px solid ${cfg.color}40` }}
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
-                  />
-                )}
-                <Icon name={cfg.icon} size={13} />
-                <span className="relative z-10">{cfg.label}</span>
-              </motion.button>
-            );
-          })}
+        <div className="ml-auto flex gap-1.5">
+          {onLoadFromGitHub && (
+            <button
+              onClick={onLoadFromGitHub}
+              disabled={loadingFromGitHub}
+              className="flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] text-white/40 hover:text-white/70 text-[10px] transition-colors disabled:opacity-40"
+            >
+              <Icon name={loadingFromGitHub ? "Loader2" : "Github"} size={10} />
+              {currentFilePath || "GitHub"}
+            </button>
+          )}
+          {onLoadLocalFile && (
+            <button
+              onClick={onLoadLocalFile}
+              className="flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] text-white/40 hover:text-white/70 text-[10px] transition-colors"
+            >
+              <Icon name="Upload" size={10} />
+              {hasLocalFile ? localFileName : "Файл"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -164,52 +153,23 @@ export default function ChatPanel({
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3">
         <AnimatePresence initial={false}>
 
-          {/* Suggestions — empty state */}
+          {/* Empty state */}
           {messages.length === 0 && !isActive && (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-2 mt-2">
-              <p className="text-white/30 text-xs font-medium mb-1">
-                {mode === "chat" && "Спросите что-нибудь:"}
-                {mode === "image" && "Или выберите пример:"}
-                {mode === "site" && "Или создать:"}
-              </p>
-              {SUGGESTIONS[mode].map((s, i) => (
+              <p className="text-white/25 text-xs font-medium mb-1">Попробуйте написать:</p>
+              {SUGGESTIONS.map((s, i) => (
                 <motion.button
-                  key={s}
+                  key={s.text}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.07 }}
-                  onClick={() => { setValue(s); textareaRef.current?.focus(); }}
-                  className="text-left px-3 py-2 rounded-lg border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] text-white/50 hover:text-white/80 text-xs transition-all"
-                  style={{ ["--hover-border" as string]: modeConfig.color + "30" }}
+                  onClick={() => { setValue(s.text); textareaRef.current?.focus(); }}
+                  className="text-left px-3 py-2.5 rounded-lg border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/[0.15] text-white/50 hover:text-white/80 text-xs transition-all flex items-center gap-2.5"
                 >
-                  {s}
+                  <Icon name={s.icon} size={12} className="opacity-40 shrink-0" />
+                  {s.text}
                 </motion.button>
               ))}
-
-              {/* Доп. кнопки для режима сайта */}
-              {mode === "site" && (onLoadFromGitHub || onLoadLocalFile) && (
-                <div className="flex gap-2 mt-1 flex-wrap">
-                  {onLoadFromGitHub && (
-                    <button
-                      onClick={onLoadFromGitHub}
-                      disabled={loadingFromGitHub}
-                      className="flex items-center gap-1.5 h-7 px-3 rounded-lg bg-white/[0.05] border border-white/[0.10] hover:bg-white/[0.10] text-white/50 hover:text-white/70 text-[10px] font-semibold transition-colors disabled:opacity-50"
-                    >
-                      <Icon name={loadingFromGitHub ? "Loader2" : "Github"} size={11} />
-                      {currentFilePath ? `Редактирую: ${currentFilePath}` : "Загрузить из GitHub"}
-                    </button>
-                  )}
-                  {onLoadLocalFile && (
-                    <button
-                      onClick={onLoadLocalFile}
-                      className="flex items-center gap-1.5 h-7 px-3 rounded-lg bg-white/[0.05] border border-white/[0.10] hover:bg-white/[0.10] text-white/50 hover:text-white/70 text-[10px] font-semibold transition-colors"
-                    >
-                      <Icon name="Upload" size={11} />
-                      {hasLocalFile ? localFileName : "Загрузить файл"}
-                    </button>
-                  )}
-                </div>
-              )}
             </motion.div>
           )}
 
@@ -223,43 +183,42 @@ export default function ChatPanel({
               className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
               {/* Image message */}
-              {msg.role === "assistant" && msg.html && msg.html.startsWith("__IMAGE__:") && (
-                <div className="flex flex-col gap-2 items-start max-w-[90%]">
+              {msg.role === "assistant" && msg.html?.startsWith("__IMAGE__:") && (
+                <div className="flex flex-col gap-2 items-start max-w-[92%]">
                   <img
                     src={msg.html.replace("__IMAGE__:", "")}
                     alt={msg.text}
-                    className="rounded-xl border border-white/[0.10] max-w-full"
-                    style={{ maxHeight: 280, objectFit: "cover" }}
+                    className="rounded-xl border border-white/[0.10] w-full"
+                    style={{ maxHeight: 320, objectFit: "cover" }}
                   />
-                  <div className="flex gap-2">
-                    <a
-                      href={msg.html.replace("__IMAGE__:", "")}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-white/[0.06] border border-white/[0.10] hover:bg-white/[0.12] text-white/50 hover:text-white/80 text-[10px] font-semibold transition-colors"
-                    >
-                      <Icon name="Download" size={10} />
-                      Скачать
-                    </a>
-                  </div>
+                  <a
+                    href={msg.html.replace("__IMAGE__:", "")}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-white/[0.06] border border-white/[0.10] hover:bg-white/[0.12] text-white/50 hover:text-white/80 text-[10px] font-semibold transition-colors"
+                  >
+                    <Icon name="Download" size={10} />
+                    Скачать
+                  </a>
                 </div>
               )}
 
-              {/* Regular text message */}
-              {!(msg.role === "assistant" && msg.html && msg.html.startsWith("__IMAGE__:")) && (
-                <div className={`max-w-[90%] px-3 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap ${
-                  msg.role === "user"
-                    ? "text-white rounded-tr-sm"
-                    : "bg-white/[0.05] border border-white/[0.08] text-white/70 rounded-tl-sm"
-                }`}
-                style={msg.role === "user" ? { backgroundColor: modeConfig.color + "cc" } : {}}
+              {/* Text message */}
+              {!(msg.role === "assistant" && msg.html?.startsWith("__IMAGE__:")) && (
+                <div
+                  className={`max-w-[90%] px-3 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap ${
+                    msg.role === "user"
+                      ? "text-white rounded-tr-sm"
+                      : "bg-white/[0.05] border border-white/[0.08] text-white/75 rounded-tl-sm"
+                  }`}
+                  style={msg.role === "user" ? { backgroundColor: "#9333ea99" } : {}}
                 >
                   {msg.text}
                 </div>
               )}
 
-              {/* Кнопки под ответом с HTML-сайтом */}
+              {/* Site HTML buttons */}
               {msg.role === "assistant" && msg.html && !msg.html.startsWith("__IMAGE__:") && (
                 <div className="flex items-center gap-2 ml-1 flex-wrap">
                   <button
@@ -267,9 +226,7 @@ export default function ChatPanel({
                       const blob = new Blob([msg.html!], { type: "text/html" });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
-                      a.href = url;
-                      a.download = "index.html";
-                      a.click();
+                      a.href = url; a.download = "index.html"; a.click();
                       URL.revokeObjectURL(url);
                     }}
                     className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-white/[0.06] border border-white/[0.10] hover:bg-white/[0.12] text-white/50 hover:text-white/80 text-[10px] font-semibold transition-colors"
@@ -277,7 +234,6 @@ export default function ChatPanel({
                     <Icon name="Download" size={10} />
                     Скачать .html
                   </button>
-
                   {onOpenPreview && (
                     <button
                       onClick={onOpenPreview}
@@ -287,96 +243,72 @@ export default function ChatPanel({
                       Превью
                     </button>
                   )}
-
                   {deployResult?.id === msg.id && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -4 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="flex items-center gap-2 flex-wrap"
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className={`text-[10px] font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}
                     >
-                      <span className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}>
-                        {deployResult.ok ? "✓ Обновлено в GitHub" : `✕ ${deployResult.message}`}
-                      </span>
-                      {deployResult.ok && liveUrl && (
-                        <a
-                          href={liveUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-[10px] font-semibold transition-colors"
-                        >
-                          <Icon name="ExternalLink" size={10} />
-                          Посмотреть сайт
-                        </a>
-                      )}
-                    </motion.div>
+                      {deployResult.ok ? "✓ Сохранено в GitHub" : `✕ ${deployResult.message}`}
+                    </motion.span>
                   )}
                 </div>
               )}
             </motion.div>
           ))}
 
-          {/* Cycle status indicator */}
+          {/* Processing indicator */}
           {isActive && (
             <motion.div
               key="cycle"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col gap-2"
+              className="flex items-center gap-2 flex-wrap"
             >
-              <div className="flex gap-2 items-center flex-wrap">
-                {mode === "image" ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold"
-                    style={{ backgroundColor: "#10b98120", borderColor: "#10b98140", color: "#10b981" }}>
-                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
-                      <Icon name="Loader2" size={10} />
-                    </motion.div>
-                    {cycleLabel || "Генерирую картинку..."}
-                  </div>
-                ) : mode === "chat" ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold"
-                    style={{ backgroundColor: "#3b82f620", borderColor: "#3b82f640", color: "#3b82f6" }}>
-                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
-                      <Icon name="Loader2" size={10} />
-                    </motion.div>
-                    {cycleLabel || "Думаю..."}
-                  </div>
-                ) : (
-                  CYCLE_STEPS.map((step) => {
-                    const isCurrentStep = status === step.key;
-                    const isDone = step.key === "reading" && status === "generating";
-                    return (
-                      <div key={step.key} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition-all ${
-                        isCurrentStep
-                          ? "bg-[#9333ea]/15 border-[#9333ea]/40 text-[#9333ea]"
-                          : isDone
-                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                            : "bg-white/[0.03] border-white/[0.07] text-white/25"
-                      }`}>
-                        {isCurrentStep ? (
-                          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
-                            <Icon name="Loader2" size={10} />
-                          </motion.div>
-                        ) : isDone ? (
-                          <Icon name="Check" size={10} />
-                        ) : (
-                          <Icon name={step.icon} size={10} />
-                        )}
-                        {isCurrentStep ? (cycleLabel || step.label) : step.label}
-                      </div>
-                    );
-                  })
-                )}
-
-                <button
-                  onClick={onStop}
-                  className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-[10px] font-semibold transition-colors ml-auto"
-                >
-                  <Icon name="Square" size={9} />
-                  Стоп
-                </button>
-              </div>
+              {lastMode === "image" ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold"
+                  style={{ backgroundColor: "#10b98118", borderColor: "#10b98135", color: "#10b981" }}>
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
+                    <Icon name="Loader2" size={10} />
+                  </motion.div>
+                  {cycleLabel || "Рисую картинку..."}
+                </div>
+              ) : lastMode === "chat" ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold"
+                  style={{ backgroundColor: "#3b82f618", borderColor: "#3b82f635", color: "#3b82f6" }}>
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
+                    <Icon name="Loader2" size={10} />
+                  </motion.div>
+                  {cycleLabel || "Думаю..."}
+                </div>
+              ) : (
+                CYCLE_STEPS.map((step) => {
+                  const isCurrent = status === step.key;
+                  const isDone = step.key === "reading" && status === "generating";
+                  return (
+                    <div key={step.key} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition-all ${
+                      isCurrent ? "bg-[#9333ea]/15 border-[#9333ea]/40 text-[#9333ea]"
+                      : isDone  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                      : "bg-white/[0.03] border-white/[0.07] text-white/25"
+                    }`}>
+                      {isCurrent ? (
+                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
+                          <Icon name="Loader2" size={10} />
+                        </motion.div>
+                      ) : isDone ? <Icon name="Check" size={10} /> : <Icon name={step.icon} size={10} />}
+                      {isCurrent ? (cycleLabel || step.label) : step.label}
+                    </div>
+                  );
+                })
+              )}
+              <button
+                onClick={onStop}
+                className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-[10px] font-semibold transition-colors"
+              >
+                <Icon name="Square" size={9} />
+                Стоп
+              </button>
             </motion.div>
           )}
 
@@ -386,28 +318,45 @@ export default function ChatPanel({
 
       {/* Input */}
       <div className="px-3 pb-3 pt-2 shrink-0 border-t border-white/[0.06]">
-        <div className="flex items-end gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-opacity-60 transition-all"
-          style={{ ["--focus-color" as string]: modeConfig.color }}
+        {/* Mode hint */}
+        <AnimatePresence>
+          {modeHint && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              className="mb-1.5 px-1 text-[10px] font-medium"
+              style={{ color: activeColor + "aa" }}
+            >
+              {modeHint}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div
+          className="flex items-end gap-2 bg-white/[0.04] border rounded-xl px-3 py-2.5 transition-all duration-300"
+          style={{ borderColor: value.trim() ? activeColor + "50" : "rgba(255,255,255,0.08)" }}
         >
-          <div className="shrink-0 mb-0.5 opacity-50">
-            <Icon name={modeConfig.icon} size={14} style={{ color: modeConfig.color }} />
-          </div>
+          <motion.div className="shrink-0 mb-0.5 opacity-50" animate={{ color: activeColor }} transition={{ duration: 0.3 }}>
+            <Icon name={detectedMode === "image" ? "Image" : detectedMode === "site" ? "Globe" : "MessageCircle"} size={14} />
+          </motion.div>
           <textarea
             ref={textareaRef}
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={modeConfig.placeholder}
+            placeholder="Напишите что угодно — чат, картинку или сайт..."
             disabled={isActive}
             rows={1}
-            className="flex-1 bg-transparent text-white/80 placeholder-white/25 text-xs resize-none outline-none leading-relaxed disabled:opacity-50"
+            className="flex-1 bg-transparent text-white/80 placeholder-white/20 text-xs resize-none outline-none leading-relaxed disabled:opacity-50"
             style={{ maxHeight: 120 }}
           />
           <motion.button
             onClick={handleSend}
             disabled={!value.trim() || isActive}
-            className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-white disabled:opacity-30 transition-all mb-0.5"
-            style={{ backgroundColor: value.trim() && !isActive ? modeConfig.color : "rgba(255,255,255,0.08)" }}
+            className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-white disabled:opacity-25 transition-all mb-0.5"
+            animate={{ backgroundColor: value.trim() && !isActive ? activeColor : "rgba(255,255,255,0.08)" }}
+            transition={{ duration: 0.3 }}
             whileTap={{ scale: 0.9 }}
           >
             <Icon name="ArrowUp" size={13} />
