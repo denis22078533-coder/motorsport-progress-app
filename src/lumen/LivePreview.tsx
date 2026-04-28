@@ -36,73 +36,67 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
   return (
     <div className="relative flex-1 w-full h-full min-w-0 min-h-0 overflow-hidden bg-[#07070c] flex flex-col">
 
-      {/* Action Bar — показываем только когда есть превью */}
-      <AnimatePresence>
-        {hasPreview && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="shrink-0 z-10 flex items-center gap-2 px-3 py-2 bg-[#0d0d18]/95 border-b border-white/[0.07] backdrop-blur-sm"
+      {/* Action Bar — всегда видимый */}
+      <div className="shrink-0 z-10 flex items-center gap-2 px-3 py-2 bg-[#0d0d18] border-b border-white/[0.07]">
+
+        {/* Применить в GitHub */}
+        <button
+          onClick={handleApply}
+          disabled={applying || !hasPreview || !onApplyToGitHub}
+          className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
+            applying
+              ? "bg-[#9333ea]/20 border border-[#9333ea]/30 text-purple-400/60 cursor-wait"
+              : !hasPreview || !onApplyToGitHub
+                ? "bg-white/[0.03] border border-white/[0.06] text-white/20 cursor-not-allowed"
+                : "bg-[#9333ea]/20 border border-[#9333ea]/40 hover:bg-[#9333ea]/35 hover:border-[#9333ea]/60 text-purple-300 hover:text-white"
+          }`}
+        >
+          <Icon name={applying ? "Loader" : "Upload"} size={11} className={applying ? "animate-spin" : ""} />
+          {applying ? "Сохраняю..." : "Применить"}
+        </button>
+
+        {/* Скачать */}
+        <button
+          onClick={onDownload}
+          disabled={!hasPreview || !onDownload}
+          className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
+            hasPreview && onDownload
+              ? "bg-white/[0.05] border border-white/[0.09] hover:bg-white/[0.10] hover:border-white/20 text-white/50 hover:text-white/80"
+              : "bg-white/[0.02] border border-white/[0.04] text-white/15 cursor-not-allowed"
+          }`}
+        >
+          <Icon name="Download" size={11} />
+          Скачать
+        </button>
+
+        {/* Живая ссылка */}
+        {liveUrl && (
+          <a
+            href={liveUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:text-emerald-300 transition-all ml-auto"
           >
-            {/* Применить в GitHub */}
-            {onApplyToGitHub && (
-              <button
-                onClick={handleApply}
-                disabled={applying}
-                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
-                  applying
-                    ? "bg-[#9333ea]/20 border border-[#9333ea]/30 text-purple-400/60 cursor-wait"
-                    : "bg-[#9333ea]/20 border border-[#9333ea]/40 hover:bg-[#9333ea]/35 hover:border-[#9333ea]/60 text-purple-300 hover:text-white"
-                }`}
-              >
-                <Icon name={applying ? "Loader" : "Upload"} size={11} className={applying ? "animate-spin" : ""} />
-                {applying ? "Сохраняю..." : "Применить изменения"}
-              </button>
-            )}
-
-            {/* Скачать */}
-            {onDownload && (
-              <button
-                onClick={onDownload}
-                className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold bg-white/[0.05] border border-white/[0.09] hover:bg-white/[0.10] hover:border-white/20 text-white/50 hover:text-white/80 transition-all"
-              >
-                <Icon name="Download" size={11} />
-                Скачать .html
-              </button>
-            )}
-
-            {/* Живая ссылка */}
-            {liveUrl && (
-              <a
-                href={liveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:text-emerald-300 transition-all ml-auto"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {liveUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                <Icon name="ExternalLink" size={10} />
-              </a>
-            )}
-
-            {/* Статус уведомление */}
-            <AnimatePresence>
-              {applyResult && (
-                <motion.span
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0 }}
-                  className={`text-[11px] font-semibold ${applyResult.ok ? "text-emerald-400" : "text-red-400"} ${liveUrl ? "" : "ml-auto"}`}
-                >
-                  {applyResult.ok ? "✓ " : "✕ "}{applyResult.message}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Живой сайт
+            <Icon name="ExternalLink" size={10} />
+          </a>
         )}
-      </AnimatePresence>
+
+        {/* Статус уведомление */}
+        <AnimatePresence>
+          {applyResult && (
+            <motion.span
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              className={`text-[11px] font-semibold ${liveUrl ? "" : "ml-auto"} ${applyResult.ok ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {applyResult.ok ? "✓ " : "✕ "}{applyResult.message}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Preview area */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
@@ -142,11 +136,11 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
               </motion.div>
               <div>
                 <p className="text-white/80 text-sm font-medium leading-snug max-w-xs">
-                  Опишите ваш проект —<br />
-                  <span className="text-violet-400">магия начнётся здесь</span>
+                  Загрузите билд или опишите проект —<br />
+                  <span className="text-violet-400">результат появится здесь</span>
                 </p>
                 <p className="text-white/25 text-xs mt-2">
-                  Сайт появится в этой области
+                  Переключитесь в чат и начните работу
                 </p>
               </div>
 
@@ -166,7 +160,6 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
               exit={{ opacity: 0 }}
               className="absolute inset-0 flex flex-col items-center justify-center gap-4"
             >
-              {/* Scanning line over existing preview */}
               {previewHtml && (
                 <iframe
                   srcDoc={previewHtml}
