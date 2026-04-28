@@ -37,7 +37,8 @@ const DEFAULT_SETTINGS: Settings = {
 
 const CREATE_SYSTEM_PROMPT = `Выполняй запрос пользователя точно и буквально.
 Если просят сайт — верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...</html>) без объяснений и markdown.
-Используй Tailwind CSS (<script src="https://cdn.tailwindcss.com"></script>), Lucide иконки и Google Fonts через CDN если нужно.`;
+Используй Tailwind CSS (<script src="https://cdn.tailwindcss.com"></script>), Lucide иконки и Google Fonts через CDN если нужно.
+ВАЖНО: всегда используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
