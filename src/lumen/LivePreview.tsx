@@ -58,7 +58,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
         <button
           onClick={onLoadZip}
           disabled={convertingZip}
-          title="Загрузить ZIP архив React/Vite проекта — AI конвертирует в HTML"
+          title="Загрузить ZIP с index.html внутри (например Скачать билд из poehali.dev)"
           className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
             convertingZip
               ? "bg-violet-500/10 border border-violet-500/20 text-violet-400/50 cursor-wait"
