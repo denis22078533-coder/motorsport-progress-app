@@ -131,30 +131,50 @@ export default function ChatPanel({
                 {msg.text}
               </div>
 
-              {/* Статус автодеплоя — только для ответов с HTML */}
-              {msg.role === "assistant" && msg.html && deployResult?.id === msg.id && (
-                <div className="flex items-center gap-2 ml-1">
-                  <motion.div
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="flex items-center gap-2 flex-wrap"
+              {/* Кнопки под ответом с HTML */}
+              {msg.role === "assistant" && msg.html && (
+                <div className="flex items-center gap-2 ml-1 flex-wrap">
+                  {/* Скачать файл */}
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([msg.html!], { type: "text/html" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "index.html";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-white/[0.06] border border-white/[0.10] hover:bg-white/[0.12] text-white/50 hover:text-white/80 text-[10px] font-semibold transition-colors"
                   >
-                    <span className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}>
-                      {deployResult.ok ? "✓ Обновлено в GitHub" : `✕ ${deployResult.message}`}
-                    </span>
-                    {deployResult.ok && liveUrl && (
-                      <a
-                        href={liveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-[10px] font-semibold transition-colors"
-                      >
-                        <Icon name="ExternalLink" size={10} />
-                        Посмотреть сайт
-                      </a>
-                    )}
-                  </motion.div>
+                    <Icon name="Download" size={10} />
+                    Скачать .html
+                  </button>
+
+                  {/* Статус деплоя */}
+                  {deployResult?.id === msg.id && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -4 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="flex items-center gap-2 flex-wrap"
+                    >
+                      <span className={`text-xs font-medium ${deployResult.ok ? "text-emerald-400" : "text-red-400"}`}>
+                        {deployResult.ok ? "✓ Обновлено в GitHub" : `✕ ${deployResult.message}`}
+                      </span>
+                      {deployResult.ok && liveUrl && (
+                        <a
+                          href={liveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 h-6 px-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 text-[10px] font-semibold transition-colors"
+                        >
+                          <Icon name="ExternalLink" size={10} />
+                          Посмотреть сайт
+                        </a>
+                      )}
+                    </motion.div>
+                  )}
                 </div>
               )}
             </motion.div>
