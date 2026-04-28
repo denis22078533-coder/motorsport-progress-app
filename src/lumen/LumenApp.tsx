@@ -76,8 +76,9 @@ const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
 3. ЗАПРЕЩЕНО менять подключённые CDN (Tailwind, Lucide, шрифты, скрипты) — они должны остаться точно такими же.
 4. ЗАПРЕЩЕНО изменять структуру секций, порядок блоков, атрибуты id/class — если пользователь об этом не просил.
 5. Меняй строго и только то, что описано в запросе пользователя. Всё остальное — скопируй без изменения символа.
-6. Все пути к ресурсам — относительные (assets/..., без ведущего слэша).
-7. Если запрос неоднозначен — делай минимальное изменение, а не максимальное.
+6. КРИТИЧНО: все пути к ресурсам (src="...", href="...", url(...)) СОХРАНЯЙ ТОЧНО КАК В ОРИГИНАЛЕ. Не меняй пути к картинкам, CSS, JS файлам — ни относительные, ни абсолютные.
+7. Если в исходном коде есть тег <base href="...">, сохрани его без изменений.
+8. Если запрос неоднозначен — делай минимальное изменение, а не максимальное.
 
 --- ТЕКУЩИЙ КОД САЙТА (сохрани его полностью, правь только нужное) ---
 ${currentHtml}
@@ -92,8 +93,9 @@ const LOCAL_FILE_EDIT_PROMPT = (currentHtml: string, fileName: string) =>
 2. ЗАПРЕЩЕНО удалять, переименовывать или переписывать любые классы, стили, анимации, цвета, шрифты, отступы — если пользователь об этом не просил.
 3. ЗАПРЕЩЕНО менять CDN-подключения (Tailwind, Lucide, шрифты, скрипты).
 4. Меняй строго только то, что описано в запросе. Всё остальное — скопируй символ в символ.
-5. Все пути к ресурсам — относительные (assets/..., без ведущего слэша).
-6. Если запрос неоднозначен — делай минимальное изменение.
+5. КРИТИЧНО: все пути к ресурсам (src="...", href="...", url(...)) СОХРАНЯЙ ТОЧНО КАК В ОРИГИНАЛЕ. Не меняй пути к картинкам, CSS, JS файлам — ни относительные, ни абсолютные.
+6. Если в исходном коде есть тег <base href="...">, сохрани его без изменений.
+7. Если запрос неоднозначен — делай минимальное изменение.
 
 --- ТЕКУЩИЙ КОД ФАЙЛА «${fileName}» ---
 ${currentHtml}
@@ -140,6 +142,25 @@ export default function LumenApp() {
     if (mdMatch) raw = mdMatch[1].trim();
     const tagMatch = raw.match(/(<!DOCTYPE[\s\S]*)/i) || raw.match(/(<html[\s\S]*)/i);
     return tagMatch ? tagMatch[1].trim() : raw.trim();
+  };
+
+  // Инжектирует <base href> в HTML чтобы относительные пути assets/ работали через живой домен
+  const injectBaseHref = (html: string, baseUrl: string): string => {
+    if (!baseUrl) return html;
+    const base = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+    // Если уже есть <base> тег — заменяем его
+    if (/<base\s[^>]*href/i.test(html)) {
+      return html.replace(/<base\s[^>]*href=["'][^"']*["'][^>]*>/i, `<base href="${base}">`);
+    }
+    // Иначе вставляем сразу после <head>
+    if (/<head>/i.test(html)) {
+      return html.replace(/<head>/i, `<head>\n  <base href="${base}">`);
+    }
+    // Fallback — вставляем после <html>
+    if (/<html[^>]*>/i.test(html)) {
+      return html.replace(/(<html[^>]*>)/i, `$1\n<head><base href="${base}"></head>`);
+    }
+    return html;
   };
 
   const callAI = async (systemPrompt: string, userText: string): Promise<string> => {
@@ -246,7 +267,8 @@ export default function LumenApp() {
 
       if (abortRef.current) return;
 
-      setPreviewHtml(cleanHtml);
+      const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
+      setPreviewHtml(htmlWithBase);
       setMobileTab("preview");
 
       const assistantId = ++msgCounter;
@@ -338,7 +360,7 @@ export default function LumenApp() {
     if (fetched.ok && fetched.html) {
       setCurrentFileSha(fetched.sha);
       setCurrentFilePath(fetched.filePath);
-      setPreviewHtml(fetched.html);
+      setPreviewHtml(liveUrl ? injectBaseHref(fetched.html, liveUrl) : fetched.html);
       setMobileTab("preview");
       const id = ++msgCounter;
       setMessages([{
@@ -364,7 +386,7 @@ export default function LumenApp() {
       const html = ev.target?.result as string;
       if (!html) return;
       setFullCodeContext({ html, fileName: file.name });
-      setPreviewHtml(html);
+      setPreviewHtml(liveUrl ? injectBaseHref(html, liveUrl) : html);
       setMobileTab("preview");
       setMessages([{
         id: ++msgCounter,

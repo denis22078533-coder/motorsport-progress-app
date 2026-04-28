@@ -165,7 +165,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
                   srcDoc={previewHtml}
                   className="absolute inset-0 w-full h-full border-0 opacity-30"
                   title="Preview (background)"
-                  sandbox="allow-scripts"
+                  sandbox="allow-scripts allow-same-origin allow-forms"
                 />
               )}
               <motion.div
@@ -200,7 +200,7 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
                 srcDoc={previewHtml}
                 className="w-full h-full border-0"
                 title="Preview"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
               />
             </motion.div>
           )}
