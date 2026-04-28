@@ -29,42 +29,63 @@ interface Settings {
 const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: "gpt-4o",
   baseUrl: import.meta.env.VITE_DEFAULT_OPENAI_BASE || "https://proxyapi.ru",
   proxyUrl: import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba",
 };
 
 
-const CREATE_SYSTEM_PROMPT = `Ты — генератор сайтов. В ответ на описание пользователя верни ТОЛЬКО полный HTML-документ без единого слова объяснений и без markdown-блоков.
+const CREATE_SYSTEM_PROMPT = `Ты — топовый веб-дизайнер и верстальщик. Создавай профессиональные, красивые и детализированные сайты по описанию пользователя.
+Верни ТОЛЬКО полный HTML-документ — без единого слова объяснений, без markdown-блоков.
 
-ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА — нарушение недопустимо:
+ТЕХНИЧЕСКИЕ ТРЕБОВАНИЯ:
 
-1. СТРУКТУРА ДОКУМЕНТА:
+1. СТРУКТУРА:
    - Начинай строго с <!DOCTYPE html>, заканчивай </html>
-   - Все пути к ресурсам — ТОЛЬКО относительные: assets/... (без ведущего слэша)
-   - Кодировка: <meta charset="UTF-8">
-   - Viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   - <meta charset="UTF-8"> и <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   - Все локальные пути — относительные: assets/... (без ведущего слэша)
 
-2. TAILWIND CSS — подключай ВСЕГДА первым в <head>:
+2. TAILWIND CSS — подключай первым в <head>:
    <script src="https://cdn.tailwindcss.com"></script>
-   После него конфигурируй через <script>tailwind.config = { ... }</script> если нужны кастомные цвета.
+   Кастомные цвета/шрифты — через <script>tailwind.config = { ... }</script>
 
-3. LUCIDE ICONS — подключай ВСЕГДА:
+3. LUCIDE ICONS:
    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-   Использование иконок: <i data-lucide="имя-иконки"></i>
-   В конце <body> вызывай: <script>lucide.createIcons();</script>
+   Иконки: <i data-lucide="название"></i>
+   В конце <body>: <script>lucide.createIcons();</script>
 
-4. ДИЗАЙН — строго тёмный glassmorphism:
-   - Фон: тёмный градиент (slate-900, gray-950, black)
-   - Карточки: backdrop-blur-xl, bg-white/5, border border-white/10, rounded-2xl
-   - Текст: белый/серый (text-white, text-gray-300, text-gray-400)
-   - Акценты: фиолетовый/индиго/циан (violet-500, indigo-400, cyan-400)
-   - Кнопки: градиентные bg-gradient-to-r, с hover-эффектами и transition
-   - Тени: shadow-2xl, drop-shadow с цветными glow-эффектами
+4. GOOGLE FONTS — подключай через <link> в <head> если нужны красивые шрифты:
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-5. НИКАКИХ внешних изображений (img src с http). Только SVG-иконки через Lucide или CSS-фигуры.
+ТРЕБОВАНИЯ К КАЧЕСТВУ — это главное:
 
-6. Адаптивность обязательна (mobile-first через Tailwind breakpoints).`;
+5. ДИЗАЙН — выбирай стиль под задачу пользователя:
+   - Для бизнеса/корпоратива: чистый минимализм, белый фон, акцентный цвет бренда, строгая типографика
+   - Для творческих/портфолио: смелые цвета, нестандартная сетка, большие заголовки
+   - Для стартапов/tech: современный градиентный фон, glassmorphism карточки, неон-акценты
+   - Для лендингов: яркий hero-блок, социальные доказательства, чёткий CTA
+   - НЕ делай всё одинаково тёмным и фиолетовым — подбирай под контекст
+
+6. НАПОЛНЕНИЕ — делай богатый, реалистичный контент:
+   - Минимум 5-7 полноценных секций: hero, features/services, about, testimonials/stats, pricing или portfolio, FAQ, footer
+   - Реальные заголовки, подзаголовки, описательные тексты — не заглушки
+   - Числа, факты, имена — придумывай правдоподобные (3 года опыта, 500+ клиентов, и т.д.)
+   - Карточки с иконками Lucide, аватары через CSS-градиенты, декоративные элементы
+
+7. ИНТЕРАКТИВНОСТЬ:
+   - Плавный скролл: <script>document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); document.querySelector(a.getAttribute('href'))?.scrollIntoView({behavior:'smooth'}); }));</script>
+   - Hover-эффекты на всех кнопках и карточках (transition, transform, shadow)
+   - Мобильное меню с анимацией открытия/закрытия
+   - Счётчики, аккордеоны, табы — если уместны
+
+8. ТИПОГРАФИКА:
+   - Крупные заголовки hero (text-5xl md:text-7xl) с правильными font-weight
+   - Правильная иерархия: h1 → h2 → h3 → p
+   - Достаточные отступы (py-20, py-24 для секций)
+
+9. АДАПТИВНОСТЬ — обязательно mobile-first через Tailwind breakpoints.
+
+10. ЗАПРЕЩЕНО: внешние изображения через <img src="http...">. Используй CSS-градиенты, SVG, Lucide иконки, emoji как декор.`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `Ты — хирургический редактор HTML. Твоя задача — внести ТОЛЬКО запрошенное изменение, сохранив весь остальной код в первозданном виде.
@@ -182,14 +203,14 @@ export default function LumenApp() {
             { role: "system", content: systemPrompt },
             { role: "user", content: userText },
           ],
-          max_tokens: 8192,
+          max_tokens: 16000,
         }
       : {
           __provider__: "claude",
           __base_url__: baseUrl,
           __api_key__: settings.apiKey.trim(),
           model: settings.model,
-          max_tokens: 8192,
+          max_tokens: 16000,
           system: systemPrompt,
           messages: [{ role: "user", content: userText }],
         };
