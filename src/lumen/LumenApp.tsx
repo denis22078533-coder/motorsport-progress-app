@@ -210,17 +210,58 @@ export default function LumenApp() {
       }
 
       if (foundHtml) {
-        // Нашли готовый HTML — показываем сразу без ИИ
-        const htmlWithBase = liveUrl ? injectBaseHref(foundHtml, liveUrl) : foundHtml;
-        savePreviewHtml(htmlWithBase);
-        setMobileTab("preview");
-        setCycleStatus("done");
-        setCycleLabel("");
-        setMessages(prev => [...prev, {
-          id: ++msgCounter,
-          role: "assistant",
-          text: `Загружен «${foundPath}» из архива. Опишите что нужно изменить — отредактирую.`,
-        }]);
+        // Нашли готовый HTML — если это билд (dist/), конвертируем через ИИ чтобы встроить стили/скрипты
+        const isBuild = foundPath.startsWith("dist/") || foundPath.startsWith("build/");
+        if (isBuild) {
+          // Билд содержит ссылки на /assets/ — нужна AI-конвертация для инлайна стилей
+          const files = await readZipFiles(file);
+          const fileCount = Object.keys(files).length;
+
+          const filesContext = Object.entries(files)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([path, content]) => `\n\n### Файл: ${path}\n\`\`\`\n${content.slice(0, 6000)}\n\`\`\``)
+            .join("");
+
+          const zipPrompt = `Конвертируй этот проект (${fileCount} файлов) в один самодостаточный HTML файл со всеми стилями и скриптами встроенными инлайн. Сохрани все тексты, цвета и структуру точно как в оригинале. Верни ТОЛЬКО HTML.
+
+--- ФАЙЛЫ ПРОЕКТА ---${filesContext}
+--- КОНЕЦ ФАЙЛОВ ---`;
+
+          setCycleLabel("Конвертирую билд...");
+          setCycleStatus("generating");
+
+          const rawResponse = await callAI(ZIP_CONVERT_SYSTEM_PROMPT, zipPrompt, (chars) => {
+            setCycleLabel(`Конвертирую... ${chars} симв.`);
+          });
+          const cleanHtml = extractHtml(rawResponse);
+
+          if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
+            throw new Error("Не удалось конвертировать проект. Попробуйте ещё раз.");
+          }
+
+          const htmlWithBase2 = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
+          savePreviewHtml(injectLightTheme(htmlWithBase2));
+          setMobileTab("preview");
+          setCycleStatus("done");
+          setCycleLabel("");
+          setMessages(prev => [...prev, {
+            id: ++msgCounter,
+            role: "assistant",
+            text: `Билд «${file.name}» конвертирован. Опишите что нужно изменить — отредактирую.`,
+          }]);
+        } else {
+          // Обычный index.html — показываем сразу
+          const htmlWithBase = liveUrl ? injectBaseHref(foundHtml, liveUrl) : foundHtml;
+          savePreviewHtml(injectLightTheme(htmlWithBase));
+          setMobileTab("preview");
+          setCycleStatus("done");
+          setCycleLabel("");
+          setMessages(prev => [...prev, {
+            id: ++msgCounter,
+            role: "assistant",
+            text: `Загружен «${foundPath}» из архива. Опишите что нужно изменить — отредактирую.`,
+          }]);
+        }
       } else {
         // Готового HTML нет — конвертируем через ИИ
         const files = await readZipFiles(file);
@@ -250,7 +291,7 @@ export default function LumenApp() {
         }
 
         const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
-        savePreviewHtml(htmlWithBase);
+        savePreviewHtml(injectLightTheme(htmlWithBase));
         setMobileTab("preview");
         setCycleStatus("done");
         setCycleLabel("");
