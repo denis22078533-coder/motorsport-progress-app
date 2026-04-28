@@ -34,10 +34,15 @@ const SUGGESTIONS = [
 
 function detectMode(text: string): ChatMode {
   const t = text.toLowerCase();
-  const imageWords = /нарисуй|сгенери|сделай (фото|картин|изображен)|создай (фото|картин|изображен)|картин|фото природ|фото город|изображени|генер.*картин|photo|image of|draw|painting/i;
+  // Сайт проверяем ПЕРВЫМ — если есть слово "сайт/лендинг" — это всегда сайт, даже если упоминаются картинки
   const siteWords = /сайт|лендинг|страниц|портфолио|интернет.магазин|визитк|html|создай сайт|сделай сайт|напиши сайт/i;
-  if (imageWords.test(t)) return "image";
   if (siteWords.test(t)) return "site";
+  // Только если нет слова "сайт" — проверяем на картинку
+  const imageWords = /^нарисуй|^сгенери|^создай фото|^создай картин|^сделай фото|^генер|нарисуй|draw |painting |photo of |image of /i;
+  if (imageWords.test(t)) return "image";
+  // Дополнительно: если только про картинку без сайта
+  const pureImageWords = /^(красив|сгенер|нарисуй|покажи|создай изображ)/i;
+  if (pureImageWords.test(t)) return "image";
   return "chat";
 }
 
