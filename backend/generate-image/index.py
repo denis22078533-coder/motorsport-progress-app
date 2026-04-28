@@ -1,7 +1,6 @@
 import os
 import json
 import uuid
-import base64
 import time
 import requests
 import boto3
@@ -20,20 +19,60 @@ def handler(event: dict, context) -> dict:
 
     token = os.environ['HUGGINGFACE_TOKEN']
 
-    resp = requests.post(
+    models = [
         'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
-        headers={
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json',
-        },
-        json={'inputs': prompt},
-        timeout=60
-    )
+        'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
+        'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
+    ]
 
-    if resp.status_code != 200:
-        return {'statusCode': 500, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': json.dumps({'error': 'generation failed', 'detail': resp.text[:300]})}
+    img_data = None
+    last_error = ''
 
-    img_data = resp.content
+    for model_url in models:
+        print(f'[generate-image] trying model: {model_url}')
+        for attempt in range(3):
+            resp = requests.post(
+                model_url,
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Content-Type': 'application/json',
+                },
+                json={'inputs': prompt, 'options': {'wait_for_model': True}},
+                timeout=90
+            )
+            print(f'[generate-image] attempt={attempt+1} status={resp.status_code} content_type={resp.headers.get("content-type","")} body_preview={resp.text[:200]}')
+
+            if resp.status_code == 200 and resp.content:
+                content_type = resp.headers.get('content-type', '')
+                if 'image' in content_type or resp.content[:4] in (b'\xff\xd8\xff\xe0', b'\xff\xd8\xff\xe1', b'\x89PNG'):
+                    img_data = resp.content
+                    break
+
+            if resp.status_code == 503:
+                try:
+                    wait_data = resp.json()
+                    wait_time = min(wait_data.get('estimated_time', 20), 25)
+                    print(f'[generate-image] model loading, waiting {wait_time}s...')
+                    time.sleep(wait_time)
+                    continue
+                except Exception:
+                    time.sleep(15)
+                    continue
+
+            last_error = f'HTTP {resp.status_code}: {resp.text[:300]}'
+            break
+
+        if img_data:
+            break
+
+    if not img_data:
+        print(f'[generate-image] all models failed, last_error={last_error}')
+        return {
+            'statusCode': 500,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'generation failed', 'detail': last_error})
+        }
+
     key = f'lumen-images/{uuid.uuid4()}.jpg'
     s3 = boto3.client(
         's3',
@@ -43,6 +82,7 @@ def handler(event: dict, context) -> dict:
     )
     s3.put_object(Bucket='files', Key=key, Body=img_data, ContentType='image/jpeg')
     cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/files/{key}"
+    print(f'[generate-image] success, url={cdn_url}')
 
     return {
         'statusCode': 200,
