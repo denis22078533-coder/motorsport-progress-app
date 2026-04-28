@@ -20,9 +20,9 @@ def handler(event: dict, context) -> dict:
     token = os.environ['HUGGINGFACE_TOKEN']
 
     models = [
-        'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
-        'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
-        'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
+        'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+        'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0',
+        'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2-1',
     ]
 
     img_data = None
