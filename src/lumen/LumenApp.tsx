@@ -83,6 +83,22 @@ const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
 ${currentHtml}
 --- КОНЕЦ КОДА ---`;
 
+const LOCAL_FILE_EDIT_PROMPT = (currentHtml: string, fileName: string) =>
+  `Ты — хирургический редактор HTML. Тебе загружен локальный файл «${fileName}». Твоя задача — внести ТОЛЬКО запрошенное изменение, вернуть ПОЛНЫЙ изменённый HTML-документ целиком.
+
+ЖЁСТКИЕ ПРАВИЛА:
+
+1. Верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...), без объяснений, без markdown.
+2. ЗАПРЕЩЕНО удалять, переименовывать или переписывать любые классы, стили, анимации, цвета, шрифты, отступы — если пользователь об этом не просил.
+3. ЗАПРЕЩЕНО менять CDN-подключения (Tailwind, Lucide, шрифты, скрипты).
+4. Меняй строго только то, что описано в запросе. Всё остальное — скопируй символ в символ.
+5. Все пути к ресурсам — относительные (assets/..., без ведущего слэша).
+6. Если запрос неоднозначен — делай минимальное изменение.
+
+--- ТЕКУЩИЙ КОД ФАЙЛА «${fileName}» ---
+${currentHtml}
+--- КОНЕЦ КОДА ---`;
+
 
 
 let msgCounter = 0;
@@ -107,6 +123,8 @@ export default function LumenApp() {
   const [currentFileSha, setCurrentFileSha] = useState<string>("");
   const [currentFilePath, setCurrentFilePath] = useState<string>("");
   const [loadingFromGitHub, setLoadingFromGitHub] = useState(false);
+  const [fullCodeContext, setFullCodeContext] = useState<{ html: string; fileName: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -192,11 +210,15 @@ export default function LumenApp() {
     setDeployResult(null);
 
     try {
-      // ── Шаг 1: читаем текущий код из GitHub ──────────────────────────────
+      // ── Шаг 1: читаем текущий код ─────────────────────────────────────────
       let currentHtml = "";
       let systemPrompt = CREATE_SYSTEM_PROMPT;
 
-      if (ghSettings.token && ghSettings.repo) {
+      // Приоритет: локально загруженный файл → GitHub
+      if (fullCodeContext) {
+        currentHtml = fullCodeContext.html;
+        systemPrompt = LOCAL_FILE_EDIT_PROMPT(currentHtml, fullCodeContext.fileName);
+      } else if (ghSettings.token && ghSettings.repo) {
         setCycleStatus("reading");
         const filePath = (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
         setCycleLabel(`Читаю ${filePath} из GitHub...`);
@@ -228,12 +250,13 @@ export default function LumenApp() {
       setMobileTab("preview");
 
       const assistantId = ++msgCounter;
+      const hasGitHub = !!(ghSettings.token && ghSettings.repo);
       setMessages(prev => [...prev, {
         id: assistantId,
         role: "assistant",
         text: currentHtml
-          ? "Готово! Правки внесены. Загружаю в GitHub..."
-          : "Готово! Сайт создан. Загружаю в GitHub...",
+          ? hasGitHub ? "Готово! Правки внесены. Загружаю в GitHub..." : "Готово! Правки внесены. Настройте GitHub чтобы сохранить."
+          : hasGitHub ? "Готово! Сайт создан. Загружаю в GitHub..." : "Готово! Сайт создан. Настройте GitHub для сохранения.",
         html: cleanHtml,
       }]);
 
@@ -333,6 +356,26 @@ export default function LumenApp() {
     }
   }, [ghSettings, fetchFromGitHub]);
 
+  const handleLoadLocalFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const html = ev.target?.result as string;
+      if (!html) return;
+      setFullCodeContext({ html, fileName: file.name });
+      setPreviewHtml(html);
+      setMobileTab("preview");
+      setMessages([{
+        id: ++msgCounter,
+        role: "assistant",
+        text: `Файл «${file.name}» загружен (${Math.round(file.size / 1024)} КБ). Вижу код. Опишите, что нужно изменить — отредактирую и сохраню в GitHub если настроен.`,
+      }]);
+    };
+    reader.readAsText(file, "utf-8");
+    e.target.value = "";
+  }, []);
+
   const handleNewProject = () => {
     setMessages([]);
     setPreviewHtml(null);
@@ -340,6 +383,7 @@ export default function LumenApp() {
     setCycleLabel("");
     setMobileTab("chat");
     setDeployResult(null);
+    setFullCodeContext(null);
   };
 
   const handleExport = () => {
@@ -384,8 +428,32 @@ export default function LumenApp() {
             onLogout={logout}
           />
 
-          {/* File context banner */}
-          {currentFilePath && (
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".html,.htm"
+            className="hidden"
+            onChange={handleLoadLocalFile}
+          />
+
+          {/* Local file context banner */}
+          {fullCodeContext && (
+            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-cyan-500/20 text-xs">
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="text-white/40">Локальный файл:</span>
+              <span className="text-cyan-400 font-mono font-medium">{fullCodeContext.fileName}</span>
+              <button
+                onClick={() => setFullCodeContext(null)}
+                className="ml-auto text-white/20 hover:text-white/60 transition-colors text-[10px] px-2 py-0.5 rounded border border-white/10 hover:border-white/20"
+              >
+                ✕ сбросить
+              </button>
+            </div>
+          )}
+
+          {/* GitHub file context banner */}
+          {!fullCodeContext && currentFilePath && (
             <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-[#9333ea]/20 text-xs">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-white/40">Редактируется:</span>
@@ -428,6 +496,9 @@ export default function LumenApp() {
                 onLoadFromGitHub={handleLoadFromGitHub}
                 loadingFromGitHub={loadingFromGitHub}
                 currentFilePath={ghSettings.filePath || "index.html"}
+                onLoadLocalFile={() => fileInputRef.current?.click()}
+                hasLocalFile={!!fullCodeContext}
+                localFileName={fullCodeContext?.fileName}
               />
             </div>
 

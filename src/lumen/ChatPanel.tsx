@@ -19,6 +19,9 @@ interface Props {
   onLoadFromGitHub?: () => void;
   loadingFromGitHub?: boolean;
   currentFilePath?: string;
+  onLoadLocalFile?: () => void;
+  hasLocalFile?: boolean;
+  localFileName?: string;
 }
 
 const CYCLE_STEPS: { key: CycleStatus; label: string; icon: string }[] = [
@@ -37,6 +40,7 @@ export default function ChatPanel({
   status, cycleLabel, messages, onSend, onStop, onApply,
   deployingId, deployResult, liveUrl, onOpenPreview,
   onLoadFromGitHub, loadingFromGitHub, currentFilePath,
+  onLoadLocalFile, hasLocalFile, localFileName,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
@@ -227,9 +231,33 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Load from GitHub — always visible */}
-      {onLoadFromGitHub && (
-        <div className="px-3 pb-1 shrink-0">
+      {/* Load buttons row */}
+      <div className="px-3 pb-1 shrink-0 flex flex-col gap-1.5">
+
+        {/* Load local file button */}
+        {onLoadLocalFile && (
+          <button
+            onClick={onLoadLocalFile}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all ${
+              hasLocalFile
+                ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25"
+                : "bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07] hover:border-cyan-500/30 text-white/50 hover:text-white/80"
+            }`}
+          >
+            <Icon name={hasLocalFile ? "FileCheck" : "Upload"} size={14} className={hasLocalFile ? "text-cyan-400" : "text-white/40"} />
+            <div className="text-left">
+              <div className="text-xs font-semibold leading-tight">
+                {hasLocalFile ? `Загружен: ${localFileName}` : "Загрузить билд (.html)"}
+              </div>
+              <div className="text-[10px] text-white/30 font-normal mt-0.5">
+                {hasLocalFile ? "Нажмите чтобы заменить файл" : "Загрузите index.html для редактирования"}
+              </div>
+            </div>
+          </button>
+        )}
+
+        {/* Load from GitHub */}
+        {onLoadFromGitHub && (
           <button
             onClick={onLoadFromGitHub}
             disabled={loadingFromGitHub}
@@ -246,15 +274,15 @@ export default function ChatPanel({
             />
             <div className="text-left">
               <div className="text-xs font-semibold leading-tight">
-                {loadingFromGitHub ? "Загружаю с GitHub..." : "Загрузить мой сайт"}
+                {loadingFromGitHub ? "Загружаю с GitHub..." : "Загрузить с GitHub"}
               </div>
               {currentFilePath && !loadingFromGitHub && (
                 <div className="text-[10px] text-white/30 font-mono font-normal mt-0.5">{currentFilePath}</div>
               )}
             </div>
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Input */}
       <div className="px-3 pb-3 pt-2 border-t border-white/[0.06] shrink-0">
