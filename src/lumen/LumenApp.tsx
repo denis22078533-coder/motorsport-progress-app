@@ -326,7 +326,7 @@ export default function LumenApp() {
     return html;
   };
 
-  const callAI = async (systemPrompt: string, userText: string): Promise<string> => {
+  const callAI = async (systemPrompt: string, userText: string, onProgress?: (chars: number) => void): Promise<string> => {
     const rawBase = (settings.baseUrl || "").trim().replace(/\/+$/, "");
     const baseUrl = rawBase || "https://proxyapi.ru";
     const isOpenAI = settings.provider === "openai";
@@ -366,7 +366,21 @@ export default function LumenApp() {
       throw new Error(`Сетевая ошибка: ${String(e)}`);
     }
 
-    const rawText = await res.text();
+    // Читаем ответ с прогрессом
+    const reader = res.body?.getReader();
+    const decoder = new TextDecoder();
+    let rawText = "";
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        rawText += decoder.decode(value, { stream: true });
+        if (onProgress) onProgress(rawText.length);
+      }
+    } else {
+      rawText = await res.text();
+    }
+
     let data: Record<string, unknown>;
     try { data = JSON.parse(rawText); } catch {
       throw new Error(`Сервер вернул не JSON (HTTP ${res.status}): ${rawText.slice(0, 200)}`);
@@ -419,9 +433,11 @@ export default function LumenApp() {
 
       // ── Шаг 2: генерируем правки ──────────────────────────────────────────
       setCycleStatus("generating");
-      setCycleLabel("Генерирую правки...");
+      setCycleLabel("Генерирую...");
 
-      const rawResponse = await callAI(systemPrompt, text);
+      const rawResponse = await callAI(systemPrompt, text, (chars) => {
+        setCycleLabel(`Генерирую... ${chars} симв.`);
+      });
       const cleanHtml = extractHtml(rawResponse);
 
       if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
