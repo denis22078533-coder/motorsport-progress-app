@@ -11,11 +11,13 @@ interface Props {
   onUndo?: () => void;
   canUndo?: boolean;
   onLoadFile?: () => void;
+  onLoadZip?: () => void;
+  convertingZip?: boolean;
 }
 
 const GRID_SIZE = 32;
 
-export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onDownload, onUndo, canUndo, onLoadFile }: Props) {
+export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onDownload, onUndo, canUndo, onLoadFile, onLoadZip, convertingZip }: Props) {
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -42,13 +44,29 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
       {/* Action Bar — всегда видимый */}
       <div className="shrink-0 z-10 flex items-center gap-1.5 px-3 py-2 bg-[#0d0d18] border-b border-white/[0.07] flex-wrap">
 
-        {/* Загрузить файл */}
+        {/* Загрузить HTML */}
         <button
           onClick={onLoadFile}
+          title="Загрузить готовый index.html"
           className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all bg-cyan-500/15 border border-cyan-500/30 hover:bg-cyan-500/25 hover:border-cyan-500/50 text-cyan-400 hover:text-cyan-300"
         >
-          <Icon name="FolderOpen" size={11} />
-          Загрузить
+          <Icon name="FileCode" size={11} />
+          HTML
+        </button>
+
+        {/* Загрузить ZIP проект */}
+        <button
+          onClick={onLoadZip}
+          disabled={convertingZip}
+          title="Загрузить ZIP архив React/Vite проекта — AI конвертирует в HTML"
+          className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
+            convertingZip
+              ? "bg-violet-500/10 border border-violet-500/20 text-violet-400/50 cursor-wait"
+              : "bg-violet-500/15 border border-violet-500/30 hover:bg-violet-500/25 hover:border-violet-500/50 text-violet-400 hover:text-violet-300"
+          }`}
+        >
+          <Icon name={convertingZip ? "Loader" : "PackageOpen"} size={11} className={convertingZip ? "animate-spin" : ""} />
+          {convertingZip ? "Читаю..." : "ZIP проект"}
         </button>
 
         {/* Отменить */}
@@ -163,12 +181,13 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
               </motion.div>
               <div>
                 <p className="text-white/80 text-sm font-medium leading-snug max-w-xs">
-                  Загрузите билд или опишите проект —<br />
+                  Опишите сайт в чате или загрузите проект —<br />
                   <span className="text-violet-400">результат появится здесь</span>
                 </p>
-                <p className="text-white/25 text-xs mt-2">
-                  Переключитесь в чат и начните работу
-                </p>
+                <div className="mt-3 flex flex-col gap-1.5 text-xs text-white/30 text-left max-w-xs">
+                  <span>📄 <span className="text-cyan-400/70">HTML</span> — загрузить готовый index.html</span>
+                  <span>📦 <span className="text-violet-400/70">ZIP проект</span> — загрузить React/Vite архив, AI конвертирует</span>
+                </div>
               </div>
 
               <div className="absolute top-4 left-4 w-5 h-5 border-l border-t border-white/10 rounded-tl-sm" />

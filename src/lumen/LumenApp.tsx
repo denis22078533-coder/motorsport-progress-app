@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import LumenTopBar from "./LumenTopBar";
 import LivePreview from "./LivePreview";
@@ -186,6 +186,119 @@ export default function LumenApp() {
   });
 
   const abortRef = useRef(false);
+  const zipInputRef = useRef<HTMLInputElement>(null);
+  const [convertingZip, setConvertingZip] = useState(false);
+
+  // Загружаем JSZip через CDN один раз
+  useEffect(() => {
+    if (!(window as unknown as Record<string, unknown>).JSZip) {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Читаем ZIP и отдаём все текстовые файлы
+  const readZipFiles = async (file: File): Promise<Record<string, string>> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const JSZip = (window as any).JSZip;
+    if (!JSZip) throw new Error("JSZip ещё не загружен, попробуйте ещё раз");
+    const zip = await JSZip.loadAsync(file);
+    const result: Record<string, string> = {};
+    const textExts = [".tsx", ".ts", ".jsx", ".js", ".css", ".html", ".json", ".md", ".svg"];
+    const skipDirs = ["node_modules", ".git", "dist", "build", ".next"];
+
+    const promises: Promise<void>[] = [];
+    zip.forEach((relativePath: string, zipEntry: { dir: boolean; async: (type: string) => Promise<string> }) => {
+      if (zipEntry.dir) return;
+      const skip = skipDirs.some(d => relativePath.includes(`${d}/`));
+      if (skip) return;
+      const ext = relativePath.slice(relativePath.lastIndexOf(".")).toLowerCase();
+      if (!textExts.includes(ext)) return;
+      promises.push(
+        zipEntry.async("string").then(content => {
+          result[relativePath] = content;
+        })
+      );
+    });
+    await Promise.all(promises);
+    return result;
+  };
+
+  const handleLoadZip = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    setConvertingZip(true);
+    setCycleStatus("reading");
+    setCycleLabel("Читаю архив проекта...");
+
+    try {
+      const files = await readZipFiles(file);
+      const fileCount = Object.keys(files).length;
+
+      if (fileCount === 0) {
+        throw new Error("В архиве не найдены файлы проекта (.tsx, .css, .html)");
+      }
+
+      // Формируем контекст для AI — все файлы проекта
+      const filesContext = Object.entries(files)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([path, content]) => `\n\n### Файл: ${path}\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``)
+        .join("");
+
+      const zipPrompt = `Тебе загружен React/Vite проект (${fileCount} файлов). Конвертируй его в один самодостаточный HTML файл.
+
+ЗАДАЧА: Воссоздай этот сайт максимально точно — сохрани весь дизайн, цвета, тексты, структуру страниц, анимации.
+
+ТЕХНИЧЕСКИЕ ТРЕБОВАНИЯ:
+1. Один файл <!DOCTYPE html>...</html> — без внешних зависимостей кроме CDN
+2. Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
+3. Lucide иконки: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script> + lucide.createIcons() в конце body
+4. Google Fonts через <link> если используются шрифты
+5. Все стили — инлайн через Tailwind классы или <style> в head
+6. Весь JavaScript — инлайн в <script> тегах
+7. Навигация между секциями — через якоря или JS показ/скрытие блоков
+8. Все тексты, заголовки, описания — точно как в оригинале
+9. Адаптивность — mobile-first
+
+Верни ТОЛЬКО HTML документ, без объяснений.
+
+--- ФАЙЛЫ ПРОЕКТА ---${filesContext}
+--- КОНЕЦ ФАЙЛОВ ---`;
+
+      setCycleLabel("Конвертирую в HTML...");
+      setCycleStatus("generating");
+
+      const rawResponse = await callAI(CREATE_SYSTEM_PROMPT, zipPrompt);
+      const cleanHtml = extractHtml(rawResponse);
+
+      if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
+        throw new Error("Не удалось конвертировать проект. Попробуйте ещё раз.");
+      }
+
+      const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
+      savePreviewHtml(htmlWithBase);
+      setMobileTab("preview");
+      setCycleStatus("done");
+      setCycleLabel("");
+
+      setMessages(prev => [...prev, {
+        id: ++msgCounter,
+        role: "assistant",
+        text: `Проект «${file.name}» успешно конвертирован (${fileCount} файлов)! Вижу ваш сайт. Опишите что нужно изменить — отредактирую.`,
+      }]);
+
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка конвертации: ${errText}` }]);
+    } finally {
+      setConvertingZip(false);
+    }
+  }, [settings, liveUrl]);
 
   const extractHtml = (raw: string): string => {
     const mdMatch = raw.match(/```html\s*\n([\s\S]*?)```/i) || raw.match(/```\s*\n([\s\S]*?)```/);
@@ -527,6 +640,15 @@ export default function LumenApp() {
             onChange={handleLoadLocalFile}
           />
 
+          {/* Hidden ZIP input */}
+          <input
+            ref={zipInputRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={handleLoadZip}
+          />
+
           {/* Local file context banner */}
           {fullCodeContext && (
             <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-cyan-500/20 text-xs">
@@ -602,6 +724,8 @@ export default function LumenApp() {
                 onUndo={htmlHistory.length > 0 ? handleUndo : undefined}
                 canUndo={htmlHistory.length > 0}
                 onLoadFile={() => fileInputRef.current?.click()}
+                onLoadZip={() => zipInputRef.current?.click()}
+                convertingZip={convertingZip}
               />
             </div>
           </div>
