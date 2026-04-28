@@ -183,11 +183,19 @@ export default function LumenApp() {
       if (!JSZip) throw new Error("JSZip ещё не загружен, попробуйте ещё раз");
       const zip = await JSZip.loadAsync(file);
 
-      // Ищем готовый index.html — сначала в dist/, потом в корне
-      const candidates = ["dist/index.html", "build/index.html", "index.html"];
+      // Собираем все пути в архиве для диагностики
+      const allPaths: string[] = [];
+      zip.forEach((relativePath: string, zipEntry: { dir: boolean }) => {
+        if (!zipEntry.dir) allPaths.push(relativePath);
+      });
+      console.log("[ZIP] Все файлы в архиве:", allPaths);
+
+      // Ищем готовый index.html — сначала точные пути, потом любой index.html
       let foundHtml = "";
       let foundPath = "";
 
+      // Точные кандидаты
+      const candidates = ["dist/index.html", "build/index.html", "index.html"];
       for (const candidate of candidates) {
         const entry = zip.file(candidate);
         if (entry) {
@@ -197,71 +205,78 @@ export default function LumenApp() {
         }
       }
 
-      // Если не нашли по точным путям — ищем любой index.html в архиве
+      // Любой index.html в любой вложенной папке
       if (!foundHtml) {
-        zip.forEach((relativePath: string, zipEntry: { dir: boolean; async: (t: string) => Promise<string> }) => {
-          if (!foundHtml && !zipEntry.dir && relativePath.endsWith("index.html")) {
-            foundPath = relativePath;
-          }
-        });
-        if (foundPath) {
-          foundHtml = await zip.file(foundPath)!.async("string");
+        // Приоритет: dist > build > корень > остальное
+        const htmlFiles = allPaths.filter(p => p.endsWith("index.html"));
+        console.log("[ZIP] Найдены index.html:", htmlFiles);
+        const pick = htmlFiles.find(p => p.includes("dist/")) 
+          || htmlFiles.find(p => p.includes("build/"))
+          || htmlFiles[0];
+        if (pick) {
+          foundPath = pick;
+          foundHtml = await zip.file(pick)!.async("string");
         }
       }
 
+      console.log("[ZIP] Выбран файл:", foundPath, "| длина HTML:", foundHtml.length);
+
       if (foundHtml) {
-        // Нашли готовый HTML — если это билд (dist/), конвертируем через ИИ чтобы встроить стили/скрипты
-        const isBuild = foundPath.startsWith("dist/") || foundPath.startsWith("build/");
-        if (isBuild) {
-          // Билд содержит ссылки на /assets/ — нужна AI-конвертация для инлайна стилей
-          const files = await readZipFiles(file);
-          const fileCount = Object.keys(files).length;
+        // Инлайним все .css и .js из архива прямо в HTML (без AI)
+        setCycleLabel("Встраиваю стили и скрипты...");
+        const baseDir = foundPath.includes("/") ? foundPath.slice(0, foundPath.lastIndexOf("/") + 1) : "";
 
-          const filesContext = Object.entries(files)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([path, content]) => `\n\n### Файл: ${path}\n\`\`\`\n${content.slice(0, 6000)}\n\`\`\``)
-            .join("");
-
-          const zipPrompt = `Конвертируй этот проект (${fileCount} файлов) в один самодостаточный HTML файл со всеми стилями и скриптами встроенными инлайн. Сохрани все тексты, цвета и структуру точно как в оригинале. Верни ТОЛЬКО HTML.
-
---- ФАЙЛЫ ПРОЕКТА ---${filesContext}
---- КОНЕЦ ФАЙЛОВ ---`;
-
-          setCycleLabel("Конвертирую билд...");
-          setCycleStatus("generating");
-
-          const rawResponse = await callAI(ZIP_CONVERT_SYSTEM_PROMPT, zipPrompt, (chars) => {
-            setCycleLabel(`Конвертирую... ${chars} симв.`);
-          });
-          const cleanHtml = extractHtml(rawResponse);
-
-          if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
-            throw new Error("Не удалось конвертировать проект. Попробуйте ещё раз.");
+        // Собираем все текстовые файлы из архива
+        const zipAssets: Record<string, string> = {};
+        const assetPromises: Promise<void>[] = [];
+        zip.forEach((relPath: string, entry: { dir: boolean; async: (t: string) => Promise<string> }) => {
+          if (entry.dir) return;
+          const ext = relPath.slice(relPath.lastIndexOf(".")).toLowerCase();
+          if ([".css", ".js"].includes(ext)) {
+            assetPromises.push(entry.async("string").then(c => { zipAssets[relPath] = c; }));
           }
+        });
+        await Promise.all(assetPromises);
+        console.log("[ZIP] Assets найдено:", Object.keys(zipAssets));
 
-          const htmlWithBase2 = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
-          savePreviewHtml(injectLightTheme(htmlWithBase2));
-          setMobileTab("preview");
-          setCycleStatus("done");
-          setCycleLabel("");
-          setMessages(prev => [...prev, {
-            id: ++msgCounter,
-            role: "assistant",
-            text: `Билд «${file.name}» конвертирован. Опишите что нужно изменить — отредактирую.`,
-          }]);
-        } else {
-          // Обычный index.html — показываем сразу
-          const htmlWithBase = liveUrl ? injectBaseHref(foundHtml, liveUrl) : foundHtml;
-          savePreviewHtml(injectLightTheme(htmlWithBase));
-          setMobileTab("preview");
-          setCycleStatus("done");
-          setCycleLabel("");
-          setMessages(prev => [...prev, {
-            id: ++msgCounter,
-            role: "assistant",
-            text: `Загружен «${foundPath}» из архива. Опишите что нужно изменить — отредактирую.`,
-          }]);
-        }
+        // Заменяем <link rel="stylesheet" href="..."> на инлайн <style>
+        let inlinedHtml = foundHtml.replace(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*\/?>/gi, (match, href) => {
+          const normalized = href.startsWith("/") ? href.slice(1) : href;
+          const key = zipAssets[baseDir + normalized] !== undefined ? baseDir + normalized
+            : zipAssets[normalized] !== undefined ? normalized
+            : Object.keys(zipAssets).find(k => k.endsWith(normalized.replace(/^.*\//, "")));
+          if (key && zipAssets[key]) {
+            console.log("[ZIP] Инлайн CSS:", key);
+            return `<style>${zipAssets[key]}</style>`;
+          }
+          return match;
+        });
+
+        // Заменяем <script src="..."> на инлайн <script>
+        inlinedHtml = inlinedHtml.replace(/<script([^>]+)src=["']([^"']+)["']([^>]*)><\/script>/gi, (match, pre, src, post) => {
+          const normalized = src.startsWith("/") ? src.slice(1) : src;
+          const key = zipAssets[baseDir + normalized] !== undefined ? baseDir + normalized
+            : zipAssets[normalized] !== undefined ? normalized
+            : Object.keys(zipAssets).find(k => k.endsWith(normalized.replace(/^.*\//, "")));
+          if (key && zipAssets[key]) {
+            console.log("[ZIP] Инлайн JS:", key);
+            const attrs = (pre + post).replace(/\s*src=["'][^"']*["']/gi, "").replace(/\s*type=["']module["']/gi, "");
+            return `<script${attrs}>${zipAssets[key]}</script>`;
+          }
+          return match;
+        });
+
+        const htmlWithBase = liveUrl ? injectBaseHref(inlinedHtml, liveUrl) : inlinedHtml;
+        savePreviewHtml(injectLightTheme(htmlWithBase));
+        setFullCodeContext({ html: inlinedHtml, fileName: foundPath });
+        setMobileTab("preview");
+        setCycleStatus("done");
+        setCycleLabel("");
+        setMessages(prev => [...prev, {
+          id: ++msgCounter,
+          role: "assistant",
+          text: `Загружен «${foundPath}» из архива. Опишите что нужно изменить — отредактирую.`,
+        }]);
       } else {
         // Готового HTML нет — конвертируем через ИИ
         const files = await readZipFiles(file);
