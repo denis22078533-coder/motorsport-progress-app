@@ -575,6 +575,38 @@ ${PROJECT_STRUCTURE}`;
     }
   }, [settings, messages]);
 
+  // ── Генерация SQL-миграции по запросу в чате ───────────────────────────────
+  const [pendingSql, setPendingSql] = useState<{ sql: string; explanation: string } | null>(null);
+
+  const handleSqlRequest = useCallback(async (text: string) => {
+    if (!settings.apiKey) { setSettingsOpen(true); return; }
+    setCycleStatus("generating");
+    setCycleLabel("Генерирую SQL...");
+    try {
+      const raw = await callAI(SQL_MIGRATION_SYSTEM_PROMPT, text, (chars) =>
+        setCycleLabel(`Генерирую SQL... ${chars} симв.`), true
+      );
+      let parsed: { sql: string; explanation: string };
+      try {
+        const match = raw.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(match ? match[0] : raw);
+      } catch {
+        parsed = { sql: raw, explanation: "SQL-миграция сгенерирована." };
+      }
+      setPendingSql(parsed);
+      setCycleStatus("done");
+      setCycleLabel("");
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: `SQL-миграция готова\n\n${parsed.explanation}\n\n${parsed.sql}\n\nНажмите кнопку «Скопировать SQL» ниже.`,
+      }]);
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${err instanceof Error ? err.message : String(err)}` }]);
+    }
+  }, [settings, messages]);
+
   const handleSend = useCallback(async (text: string, mode: ChatMode = "site") => {
     abortRef.current = false;
     const userMsg: Message = { id: ++msgCounter, role: "user", text };
@@ -898,37 +930,7 @@ ${urlList}
     }
   }, [ghSettings]);
 
-  // ── Генерация SQL-миграции по запросу в чате ───────────────────────────────
-  const [pendingSql, setPendingSql] = useState<{ sql: string; explanation: string } | null>(null);
 
-  const handleSqlRequest = useCallback(async (text: string) => {
-    if (!settings.apiKey) { setSettingsOpen(true); return; }
-    setCycleStatus("generating");
-    setCycleLabel("Генерирую SQL...");
-    try {
-      const raw = await callAI(SQL_MIGRATION_SYSTEM_PROMPT, text, (chars) =>
-        setCycleLabel(`Генерирую SQL... ${chars} симв.`), true
-      );
-      let parsed: { sql: string; explanation: string };
-      try {
-        const match = raw.match(/\{[\s\S]*\}/);
-        parsed = JSON.parse(match ? match[0] : raw);
-      } catch {
-        parsed = { sql: raw, explanation: "SQL-миграция сгенерирована." };
-      }
-      setPendingSql(parsed);
-      setCycleStatus("done");
-      setCycleLabel("");
-      setMessages(prev => [...prev, {
-        id: ++msgCounter, role: "assistant",
-        text: `**SQL-миграция готова**\n\n${parsed.explanation}\n\n\`\`\`sql\n${parsed.sql}\n\`\`\`\n\n_Нажмите кнопку «Скопировать SQL» ниже чтобы скопировать._`,
-      }]);
-    } catch (err) {
-      setCycleStatus("error");
-      setCycleLabel("");
-      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${err instanceof Error ? err.message : String(err)}` }]);
-    }
-  }, [settings, messages]);
 
   const handleApplyToGitHub = useCallback(async () => {
     if (!ghSettings.token || !ghSettings.repo) {
