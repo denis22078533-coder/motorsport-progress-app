@@ -29,61 +29,102 @@ interface Settings {
 const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   provider: "openai",
-  model: "gpt-4o",
+  model: "gpt-4o-mini",
   baseUrl: import.meta.env.VITE_DEFAULT_OPENAI_BASE || "https://proxyapi.ru",
   proxyUrl: import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba",
 };
 
 
 const PROJECT_STRUCTURE = `
-## Структура проекта Lumen (файловая система):
-- /src/ — React/Vite фронтенд (TypeScript, Tailwind CSS)
-  - /src/lumen/ — компоненты AI-ассистента (ChatPanel, LumenApp, LivePreview, SettingsDrawer)
-  - /src/components/ui/ — shadcn/ui компоненты (Button, Dialog, Drawer и др.)
-  - /src/index.css — глобальные CSS переменные и стили
-  - /src/App.tsx — точка входа приложения
-- /backend/ — Python 3.11 Cloud Functions
-  - /backend/lumen-proxy/ — прокси к OpenAI/Claude API со стримингом
-  - /backend/generate-image/ — генерация изображений через Pollinations + S3
-- /db_migrations/ — SQL-миграции PostgreSQL (Flyway, формат V{version}__{name}.sql)
-- /public/ — статические файлы
-- package.json, vite.config.ts, tailwind.config.ts — конфигурация проекта
+## Project file structure:
+/src/                        — React/Vite frontend (TypeScript + Tailwind CSS)
+  /src/lumen/                — AI assistant core (ChatPanel, LumenApp, LivePreview, SettingsDrawer, useGitHub.ts)
+  /src/components/ui/        — shadcn/ui components (Button, Dialog, Drawer, etc.)
+  /src/index.css             — global CSS variables and base styles
+  /src/App.tsx               — application entry point
+/backend/                    — Python 3.11 Cloud Functions (deployed serverless)
+  /backend/lumen-proxy/      — OpenAI/Claude API proxy with streaming support
+  /backend/generate-image/   — image generation via Pollinations + S3 CDN
+  /backend/auth/             — authentication service
+/db_migrations/              — PostgreSQL migrations (Flyway format: V{n}__{name}.sql)
+/public/                     — static assets
+package.json, vite.config.ts, tailwind.config.ts — project config
 `;
 
-const CREATE_SYSTEM_PROMPT = `Выполняй запрос пользователя точно и буквально.
-Если просят сайт — верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...</html>) без объяснений и markdown.
-Используй Tailwind CSS (<script src="https://cdn.tailwindcss.com"></script>), Lucide иконки и Google Fonts через CDN если нужно.
-ВАЖНО: всегда используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
-КАРТИНКИ: Если в запросе переданы готовые URL картинок — ОБЯЗАТЕЛЬНО используй их в <img src="..."> тегах. Не используй placeholder-картинки если есть готовые URL.
-
+// ── Базовая роль AI — Senior Fullstack Developer ────────────────────────────
+const SENIOR_DEV_ROLE = `You are a Senior Fullstack Developer with 10+ years of experience in web development.
+Your expertise: HTML/CSS/JS, React, TypeScript, Python, PostgreSQL, REST APIs, clean architecture.
+Rules you always follow:
+- Write production-quality, clean, maintainable code
+- No placeholder comments like "// add your code here" — always write real implementation
+- Semantic HTML, accessible markup, mobile-first responsive design
+- Optimize for performance: minimal DOM, efficient CSS, no layout thrashing
+- When editing existing code — preserve the architecture, only change what's asked
+- Output ONLY the requested artifact — no explanations, no markdown wrappers unless it IS markdown
+- Respond in the same language the user writes in (Russian if user writes in Russian)
 ${PROJECT_STRUCTURE}`;
 
+const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
+## Task: Create a complete website
+Output ONLY a full standalone HTML document (<!DOCTYPE html>...</html>). No explanations, no markdown fences.
+Technical requirements:
+- Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Lucide icons via CDN if needed: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+- Google Fonts via CDN for typography if needed
+- Default to light theme (white/light-gray background, dark text) unless explicitly asked for dark
+- All JS inline in <script> tags, no external files
+- Fully responsive, works on mobile and desktop
+- IMAGES: If ready image URLs are provided in the request — use them in <img src="..."> tags. No placeholder images if real URLs exist.`;
+
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
-  `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
-ВАЖНО: используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
+  `${SENIOR_DEV_ROLE}
+## Task: Edit existing website code
+Output ONLY the complete modified HTML document. No explanations, no markdown.
+Rules:
+- Make EXACTLY the requested changes, nothing more
+- Preserve all existing styles, structure, content that was NOT mentioned in the request
+- Keep the same framework/library versions already in the code
+- Default to light theme unless user explicitly requests dark
 
---- ТЕКУЩИЙ КОД САЙТА ---
+--- CURRENT SITE CODE ---
 ${currentHtml}
---- КОНЕЦ КОДА ---`;
+--- END OF CODE ---`;
 
-const ZIP_CONVERT_SYSTEM_PROMPT = `Ты — эксперт по конвертации React/Vite проектов в HTML. Твоя ЕДИНСТВЕННАЯ задача — точно воссоздать существующий сайт из предоставленных файлов проекта в виде одного HTML файла.
-
-СТРОГИЕ ПРАВИЛА:
-1. Верни ТОЛЬКО полный HTML-документ (<!DOCTYPE html>...) — без объяснений, без markdown.
-2. ЗАПРЕЩЕНО придумывать новый дизайн, цвета, тексты — воссоздавай ТОЧНО то что есть в файлах.
-3. Сохраняй все тексты, заголовки, описания, названия из оригинальных файлов проекта.
-4. Сохраняй цветовую схему, шрифты, стили из оригинала.
-5. Подключай через CDN: Tailwind CSS, Lucide иконки, Google Fonts (если используются).
-6. Весь JS — инлайн в <script> тегах.
-7. Адаптивность обязательна.`;
+const ZIP_CONVERT_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
+## Task: Convert React/Vite project to single HTML file
+Your ONLY goal is to faithfully recreate the existing site from the provided source files as one self-contained HTML file.
+Strict rules:
+1. Output ONLY the complete HTML document (<!DOCTYPE html>...) — no explanations, no markdown
+2. DO NOT invent new design, colors, or copy — reproduce EXACTLY what's in the source files
+3. Preserve all text, headings, descriptions from the original
+4. Preserve color scheme, fonts, spacing from the original
+5. Load via CDN: Tailwind CSS, Lucide icons, Google Fonts (if used in source)
+6. All JS inline in <script> tags
+7. Fully responsive`;
 
 const LOCAL_FILE_EDIT_PROMPT = (currentHtml: string, fileName: string) =>
-  `Выполняй запрос пользователя точно и буквально. Верни ТОЛЬКО полный HTML-документ без объяснений и markdown.
-ВАЖНО: используй светлый фон (белый или светло-серый) и тёмный текст — сайт должен быть читаемым. Если пользователь явно не просит тёмную тему — делай светлый дизайн.
+  `${SENIOR_DEV_ROLE}
+## Task: Edit uploaded file «${fileName}»
+Output ONLY the complete modified HTML document. No explanations, no markdown.
+Make EXACTLY the requested changes — preserve everything else as-is.
 
---- ТЕКУЩИЙ КОД ФАЙЛА «${fileName}» ---
+--- CURRENT FILE CODE ---
 ${currentHtml}
---- КОНЕЦ КОДА ---`;
+--- END OF CODE ---`;
+
+// ── Промпт для генерации SQL-миграций ──────────────────────────────────────
+const SQL_MIGRATION_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
+## Task: Generate SQL migration
+The user wants to change the database schema. Generate a proper SQL migration.
+Rules:
+1. Output a JSON object with two fields:
+   - "sql": the complete SQL migration script (PostgreSQL syntax, also compatible with MySQL where possible)
+   - "explanation": brief description of what this migration does (in Russian, 1-3 sentences)
+2. Migration format: standard DDL (CREATE TABLE, ALTER TABLE, ADD COLUMN, CREATE INDEX, etc.)
+3. Use IF NOT EXISTS where applicable to make migrations idempotent
+4. Add comments in SQL for clarity
+5. MySQL compatibility notes: avoid PostgreSQL-specific types (use VARCHAR instead of TEXT where possible, use TINYINT(1) for boolean)
+Output ONLY valid JSON, no markdown fences.`;
 
 
 
@@ -539,9 +580,16 @@ ${PROJECT_STRUCTURE}`;
     const userMsg: Message = { id: ++msgCounter, role: "user", text };
     setMessages(prev => [...prev, userMsg]);
     setDeployResult(null);
+    setPendingSql(null);
 
     if (mode === "chat") {
-      await handleSendChat(text);
+      // Если запрос про БД/SQL — генерируем миграцию
+      const isSqlRequest = /создай таблиц|добавь колонк|измени схему|миграци|sql|create table|alter table|добавь поле|удали колонк|индекс|foreign key|база данных.*изменить|изменить.*базу/i.test(text);
+      if (isSqlRequest) {
+        await handleSqlRequest(text);
+      } else {
+        await handleSendChat(text);
+      }
       return;
     }
 
@@ -696,7 +744,7 @@ ${urlList}
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath, fullCodeContext, liveUrl, handleSendChat, handleSendImage]);
+  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath, fullCodeContext, liveUrl, handleSendChat, handleSendImage, handleSqlRequest]);
 
   const handleApply = useCallback(async (msgId: number, html: string) => {
     if (!ghSettings.token) { setSettingsOpen(true); return; }
@@ -801,6 +849,87 @@ ${urlList}
     URL.revokeObjectURL(url);
   };
 
+  // ── Экспорт полного исходного кода проекта через GitHub API ───────────────
+  const [exportingSource, setExportingSource] = useState(false);
+  const handleExportSource = useCallback(async () => {
+    if (!ghSettings.token || !ghSettings.repo) {
+      setSettingsOpen(true);
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: "Для экспорта исходного кода нужно настроить GitHub — укажите токен и репозиторий в настройках.",
+      }]);
+      return;
+    }
+    setExportingSource(true);
+    setCycleStatus("reading");
+    setCycleLabel("Загружаю исходники из GitHub...");
+    try {
+      const [owner, repo] = ghSettings.repo.split("/");
+      const headers = { Authorization: `Bearer ${ghSettings.token}`, Accept: "application/vnd.github+json" };
+
+      // Получаем ZIP-архив репозитория через GitHub API
+      const zipRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/zipball`, { headers });
+      if (!zipRes.ok) throw new Error(`GitHub API: ${zipRes.status} ${zipRes.statusText}`);
+
+      const blob = await zipRes.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${repo}-source.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setCycleStatus("done");
+      setCycleLabel("");
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: `✅ Исходный код скачан: ${repo}-source.zip\nАрхив содержит весь проект: /src, /backend, конфиги.\nРазверните на Reg.ru: распакуйте, выполните npm install && npm run build, укажите папку /dist как корень сайта.`,
+      }]);
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      const errText = err instanceof Error ? err.message : String(err);
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: `Ошибка загрузки исходников: ${errText}. Проверьте токен GitHub и название репозитория.`,
+      }]);
+    } finally {
+      setExportingSource(false);
+    }
+  }, [ghSettings]);
+
+  // ── Генерация SQL-миграции по запросу в чате ───────────────────────────────
+  const [pendingSql, setPendingSql] = useState<{ sql: string; explanation: string } | null>(null);
+
+  const handleSqlRequest = useCallback(async (text: string) => {
+    if (!settings.apiKey) { setSettingsOpen(true); return; }
+    setCycleStatus("generating");
+    setCycleLabel("Генерирую SQL...");
+    try {
+      const raw = await callAI(SQL_MIGRATION_SYSTEM_PROMPT, text, (chars) =>
+        setCycleLabel(`Генерирую SQL... ${chars} симв.`), true
+      );
+      let parsed: { sql: string; explanation: string };
+      try {
+        const match = raw.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(match ? match[0] : raw);
+      } catch {
+        parsed = { sql: raw, explanation: "SQL-миграция сгенерирована." };
+      }
+      setPendingSql(parsed);
+      setCycleStatus("done");
+      setCycleLabel("");
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: `**SQL-миграция готова**\n\n${parsed.explanation}\n\n\`\`\`sql\n${parsed.sql}\n\`\`\`\n\n_Нажмите кнопку «Скопировать SQL» ниже чтобы скопировать._`,
+      }]);
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${err instanceof Error ? err.message : String(err)}` }]);
+    }
+  }, [settings, messages]);
+
   const handleApplyToGitHub = useCallback(async () => {
     if (!ghSettings.token || !ghSettings.repo) {
       setSettingsOpen(true);
@@ -845,6 +974,8 @@ ${urlList}
             cycleLabel={cycleLabel}
             onNewProject={handleNewProject}
             onExport={handleExport}
+            onExportSource={ghSettings.token && ghSettings.repo ? handleExportSource : undefined}
+            exportingSource={exportingSource}
             onSettings={() => setSettingsOpen(true)}
             onLogout={logout}
           />
@@ -943,6 +1074,7 @@ ${urlList}
                 onLoadLocalFile={() => fileInputRef.current?.click()}
                 hasLocalFile={!!fullCodeContext}
                 localFileName={fullCodeContext?.fileName}
+                pendingSql={pendingSql}
               />
             </div>
 

@@ -6,6 +6,8 @@ interface Props {
   cycleLabel?: string;
   onNewProject: () => void;
   onExport: () => void;
+  onExportSource?: () => void;
+  exportingSource?: boolean;
   onSettings: () => void;
   onLogout: () => void;
 }
@@ -17,7 +19,7 @@ const STATUS_MAP = {
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onExportSource, exportingSource, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -50,6 +52,19 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport
 
       {/* Right — Actions */}
       <div className="flex items-center gap-1.5 shrink-0">
+        {onExportSource && (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={onExportSource}
+            disabled={exportingSource}
+            title="Скачать исходный код проекта (ZIP)"
+            className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-emerald-500/30 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12] text-emerald-400/70 hover:text-emerald-400 text-xs font-medium transition-colors disabled:opacity-40"
+          >
+            <Icon name={exportingSource ? "Loader" : "FolderDown"} size={12} className={exportingSource ? "animate-spin" : ""} />
+            <span className="hidden lg:inline">Исходники</span>
+          </motion.button>
+        )}
+
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onExport}

@@ -23,6 +23,7 @@ interface Props {
   onLoadLocalFile?: () => void;
   hasLocalFile?: boolean;
   localFileName?: string;
+  pendingSql?: { sql: string; explanation: string } | null;
 }
 
 const SUGGESTIONS = [
@@ -67,11 +68,20 @@ export default function ChatPanel({
   status, cycleLabel, messages, onSend, onStop, onApply,
   deployingId, deployResult, liveUrl, onOpenPreview,
   onLoadFromGitHub, loadingFromGitHub, currentFilePath,
-  onLoadLocalFile, hasLocalFile, localFileName,
+  onLoadLocalFile, hasLocalFile, localFileName, pendingSql,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
   const [lastMode, setLastMode] = useState<ChatMode>("chat");
+  const [sqlCopied, setSqlCopied] = useState(false);
+
+  const handleCopySql = () => {
+    if (!pendingSql) return;
+    navigator.clipboard.writeText(pendingSql.sql).then(() => {
+      setSqlCopied(true);
+      setTimeout(() => setSqlCopied(false), 2000);
+    });
+  };
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -314,6 +324,31 @@ export default function ChatPanel({
                 <Icon name="Square" size={9} />
                 Стоп
               </button>
+            </motion.div>
+          )}
+
+          {/* SQL copy button */}
+          {pendingSql && !isActive && (
+            <motion.div
+              key="sql-action"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-2 mt-1"
+            >
+              <button
+                onClick={handleCopySql}
+                className="flex items-center gap-1.5 h-7 px-3 rounded-lg border text-[10px] font-semibold transition-all"
+                style={{
+                  backgroundColor: sqlCopied ? "#10b98118" : "#3b82f618",
+                  borderColor: sqlCopied ? "#10b98140" : "#3b82f640",
+                  color: sqlCopied ? "#10b981" : "#3b82f6",
+                }}
+              >
+                <Icon name={sqlCopied ? "Check" : "Copy"} size={10} />
+                {sqlCopied ? "Скопировано!" : "Скопировать SQL"}
+              </button>
+              <span className="text-white/20 text-[9px]">для db_migrations/ или MySQL на Reg.ru</span>
             </motion.div>
           )}
 
