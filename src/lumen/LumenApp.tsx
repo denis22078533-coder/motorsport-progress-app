@@ -881,22 +881,60 @@ ${urlList}
     URL.revokeObjectURL(url);
   };
 
-  // ── Экспорт исходного кода — открываем страницу скачивания на GitHub ────────
-  const [exportingSource] = useState(false);
-  const handleExportSource = useCallback(() => {
+  // ── Экспорт исходного кода через backend (обход CORS) ────────────────────
+  const [exportingSource, setExportingSource] = useState(false);
+  const GITHUB_DOWNLOAD_URL = "https://functions.poehali.dev/b9736970-2710-4830-9cbf-3b2f015371be";
+
+  const handleExportSource = useCallback(async () => {
     if (!ghSettings.token || !ghSettings.repo) {
       setSettingsOpen(true);
       return;
     }
-    const [owner, repo] = ghSettings.repo.split("/");
-    // Открываем страницу архива на GitHub — пользователь скачивает через браузер (нет CORS)
-    window.open(`https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`, "_blank");
-    setCycleStatus("done");
-    setCycleLabel("");
-    setMessages(prev => [...prev, {
-      id: ++msgCounter, role: "assistant",
-      text: `Открываю скачивание исходников репозитория ${ghSettings.repo}.\nЕсли скачивание не началось — войдите в GitHub в браузере и повторите.\nПосле скачивания: npm install → npm run build → папка /dist на хостинг.`,
-    }]);
+    setExportingSource(true);
+    setCycleStatus("reading");
+    setCycleLabel("Скачиваю исходники...");
+    try {
+      const res = await fetch(GITHUB_DOWNLOAD_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: ghSettings.token, repo: ghSettings.repo, branch: "main" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.zip_b64) throw new Error(data.error || `HTTP ${res.status}`);
+
+      // Декодируем base64 → Blob → скачиваем
+      const binary = atob(data.zip_b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const repoName = ghSettings.repo.split("/")[1] || "lumen-source";
+      a.href = url;
+      a.download = `${repoName}-source.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setCycleStatus("done");
+      setCycleLabel("");
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: `Исходники скачаны: ${repoName}-source.zip (${Math.round(data.size / 1024)} КБ)\nАрхив содержит весь проект: /src, /backend, конфиги.\nДля запуска: npm install → npm run build → папка /dist на хостинг.`,
+      }]);
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      const errText = err instanceof Error ? err.message : String(err);
+      // Fallback — открываем GitHub напрямую
+      const [owner, repo] = ghSettings.repo.split("/");
+      window.open(`https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`, "_blank");
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: `Не удалось скачать через сервер (${errText}).\nОткрываю GitHub напрямую — авторизуйтесь на github.com и скачайте архив в открывшейся вкладке.`,
+      }]);
+    } finally {
+      setExportingSource(false);
+    }
   }, [ghSettings]);
 
 
