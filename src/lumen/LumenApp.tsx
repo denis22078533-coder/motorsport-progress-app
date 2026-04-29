@@ -881,53 +881,22 @@ ${urlList}
     URL.revokeObjectURL(url);
   };
 
-  // ── Экспорт полного исходного кода проекта через GitHub API ───────────────
-  const [exportingSource, setExportingSource] = useState(false);
-  const handleExportSource = useCallback(async () => {
+  // ── Экспорт исходного кода — открываем страницу скачивания на GitHub ────────
+  const [exportingSource] = useState(false);
+  const handleExportSource = useCallback(() => {
     if (!ghSettings.token || !ghSettings.repo) {
       setSettingsOpen(true);
-      setMessages(prev => [...prev, {
-        id: ++msgCounter, role: "assistant",
-        text: "Для экспорта исходного кода нужно настроить GitHub — укажите токен и репозиторий в настройках.",
-      }]);
       return;
     }
-    setExportingSource(true);
-    setCycleStatus("reading");
-    setCycleLabel("Загружаю исходники из GitHub...");
-    try {
-      const [owner, repo] = ghSettings.repo.split("/");
-      const headers = { Authorization: `Bearer ${ghSettings.token}`, Accept: "application/vnd.github+json" };
-
-      // Получаем ZIP-архив репозитория через GitHub API
-      const zipRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/zipball`, { headers });
-      if (!zipRes.ok) throw new Error(`GitHub API: ${zipRes.status} ${zipRes.statusText}`);
-
-      const blob = await zipRes.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${repo}-source.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setCycleStatus("done");
-      setCycleLabel("");
-      setMessages(prev => [...prev, {
-        id: ++msgCounter, role: "assistant",
-        text: `✅ Исходный код скачан: ${repo}-source.zip\nАрхив содержит весь проект: /src, /backend, конфиги.\nРазверните на Reg.ru: распакуйте, выполните npm install && npm run build, укажите папку /dist как корень сайта.`,
-      }]);
-    } catch (err) {
-      setCycleStatus("error");
-      setCycleLabel("");
-      const errText = err instanceof Error ? err.message : String(err);
-      setMessages(prev => [...prev, {
-        id: ++msgCounter, role: "assistant",
-        text: `Ошибка загрузки исходников: ${errText}. Проверьте токен GitHub и название репозитория.`,
-      }]);
-    } finally {
-      setExportingSource(false);
-    }
+    const [owner, repo] = ghSettings.repo.split("/");
+    // Открываем страницу архива на GitHub — пользователь скачивает через браузер (нет CORS)
+    window.open(`https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`, "_blank");
+    setCycleStatus("done");
+    setCycleLabel("");
+    setMessages(prev => [...prev, {
+      id: ++msgCounter, role: "assistant",
+      text: `Открываю скачивание исходников репозитория ${ghSettings.repo}.\nЕсли скачивание не началось — войдите в GitHub в браузере и повторите.\nПосле скачивания: npm install → npm run build → папка /dist на хостинг.`,
+    }]);
   }, [ghSettings]);
 
 
