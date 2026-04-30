@@ -176,27 +176,7 @@ export default function ChatPanel({
           transition={{ duration: 0.4 }}
         />
         <span className="text-white/60 text-xs font-medium tracking-wide uppercase">AI Ассистент</span>
-        <div className="ml-auto flex gap-1.5">
-          {onLoadFromGitHub && (
-            <button
-              onClick={onLoadFromGitHub}
-              disabled={loadingFromGitHub}
-              className="flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] text-white/40 hover:text-white/70 text-[10px] transition-colors disabled:opacity-40"
-            >
-              <Icon name={loadingFromGitHub ? "Loader2" : "Github"} size={10} />
-              {currentFilePath || "GitHub"}
-            </button>
-          )}
-          {onLoadLocalFile && (
-            <button
-              onClick={onLoadLocalFile}
-              className="flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.10] text-white/40 hover:text-white/70 text-[10px] transition-colors"
-            >
-              <Icon name="Upload" size={10} />
-              {hasLocalFile ? localFileName : "Файл"}
-            </button>
-          )}
-        </div>
+
       </div>
 
       {/* Messages */}
