@@ -276,22 +276,16 @@ export default function SettingsDrawer({
                 <>
                   {/* Self-Edit Mode */}
                   <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="Brain" size={15} className="text-amber-400" />
-                        </div>
-                        <div>
-                          <p className="text-amber-300 text-sm font-semibold">Self-Edit Mode</p>
-                          <p className="text-white/35 text-xs leading-relaxed mt-0.5">
-                            ИИ получает доступ к файлам платформы через Engine GitHub и может редактировать собственный код по запросу в чате.
-                          </p>
-                        </div>
+                    {/* Заголовок + тумблер */}
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                        <Icon name="Brain" size={14} className="text-amber-400" />
                       </div>
+                      <p className="text-amber-300 text-sm font-semibold flex-1">Self-Edit Mode</p>
                       {/* Toggle */}
                       <button
                         onClick={() => onSelfEditToggle(!selfEditMode)}
-                        className={`relative w-11 h-6 rounded-full border transition-all shrink-0 mt-1 ${
+                        className={`relative w-11 h-6 rounded-full border transition-all shrink-0 ${
                           selfEditMode
                             ? "bg-amber-500/30 border-amber-500/50"
                             : "bg-white/[0.05] border-white/10"
@@ -304,6 +298,9 @@ export default function SettingsDrawer({
                         }`} />
                       </button>
                     </div>
+                    <p className="text-white/35 text-xs leading-relaxed pl-9">
+                      ИИ получает доступ к файлам платформы через Engine GitHub и может редактировать собственный код по запросу в чате.
+                    </p>
                     {selfEditMode && (
                       <div className="mt-3 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
