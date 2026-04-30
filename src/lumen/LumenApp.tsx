@@ -628,19 +628,65 @@ export default function LumenApp() {
     }
   }, []);
 
+  const readFileFromGitHub = async (path: string, token: string, repo: string, branch: string): Promise<string | null> => {
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
+    const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+    if (!res.ok) return null;
+    const data = await res.json() as { content: string };
+    return decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+  };
+
   const handleSendChat = useCallback(async (text: string) => {
     if (!settings.apiKey) { setSettingsOpen(true); return; }
     setCycleStatus("generating");
     setCycleLabel("Думаю...");
+    const token = ghSettings.token;
+    const repo = ghSettings.repo;
+    const branch = ghSettings.branch || "main";
     try {
-      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Lumen. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.
+      const repoInfo = token && repo
+        ? `\n\nПодключён GitHub репозиторий: ${repo} (ветка: ${branch}). Если нужно прочитать файл из репозитория — используй action-блок:\n\`\`\`action\n{"action":"read","path":"src/App.tsx"}\n\`\`\``
+        : "";
+      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Lumen. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
 ${PROJECT_STRUCTURE}`;
       const response = await callAI(
         chatSystemPrompt,
         text,
         (chars) => setCycleLabel(`Думаю... ${chars} симв.`),
-        true // передаём историю чата
+        true
       );
+
+      // Обрабатываем action read — ИИ хочет прочитать файл
+      const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
+      if (actionMatch && token && repo) {
+        let actionData: { action: string; path?: string };
+        try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
+
+        if (actionData.action === "read" && actionData.path) {
+          setCycleLabel("Читаю файл...");
+          const fileContent = await readFileFromGitHub(actionData.path, token, repo, branch);
+          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+          if (fileContent !== null) {
+            const sizeStr = fileContent.length < 1024
+              ? `${fileContent.length} байт`
+              : `${(fileContent.length / 1024).toFixed(1)} КБ`;
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
+            const response2 = await callAI(
+              chatSystemPrompt,
+              `Файл \`${actionData.path}\`:\n\`\`\`\n${fileContent}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`,
+              (chars) => setCycleLabel(`Анализирую... ${chars} симв.`),
+              false
+            );
+            setCycleStatus("done"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          } else {
+            setCycleStatus("error"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать файл \`${actionData.path}\` — файл не найден или нет доступа.`.trim() }]);
+          }
+          return;
+        }
+      }
+
       setCycleStatus("done");
       setCycleLabel("");
       setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response }]);
@@ -650,7 +696,7 @@ ${PROJECT_STRUCTURE}`;
       const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
       setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
     }
-  }, [settings, messages]);
+  }, [settings, ghSettings, messages]);
 
   // ── Генерация SQL-миграции по запросу в чате ───────────────────────────────
   const [pendingSql, setPendingSql] = useState<{ sql: string; explanation: string } | null>(null);
@@ -711,7 +757,8 @@ ${PROJECT_STRUCTURE}`;
             const data = await res.json() as { content: string; sha: string };
             const fileContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
             const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${Math.round(fileContent.length / 1024)} КБ). Продолжаю...` }]);
+            const sizeStr = fileContent.length < 1024 ? `${fileContent.length} байт` : `${(fileContent.length / 1024).toFixed(1)} КБ`;
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${sizeStr}). Продолжаю...`.trim() }]);
             // Второй вызов ИИ с контентом файла
             const response2 = await callAI(systemPrompt, `Файл ${actionData.path}:\n\`\`\`\n${fileContent}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
