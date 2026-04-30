@@ -663,12 +663,34 @@ export default function LumenApp() {
     }
   }, []);
 
-  const readFileFromGitHub = async (path: string, token: string, repo: string, branch: string): Promise<string | null> => {
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
-    const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
-    if (!res.ok) return null;
-    const data = await res.json() as { content: string };
-    return decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+  const readFileFromGitHub = async (path: string, token: string, repo: string, branch: string): Promise<{ content: string; error?: never } | { content?: never; error: string }> => {
+    if (!repo || !token) return { error: "Не настроен Engine-репозиторий или токен. Откройте Настройки → Engine GitHub." };
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${encodeURIComponent(branch)}`;
+    let res: Response;
+    try {
+      res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+    } catch (e) {
+      return { error: `Сетевая ошибка при чтении ${path}: ${String(e)}` };
+    }
+    if (res.status === 401) return { error: `Ошибка авторизации (401). Проверьте токен GitHub в настройках Engine.` };
+    if (res.status === 403) return { error: `Нет доступа (403) к файлу \`${path}\`. Проверьте права токена.` };
+    if (res.status === 404) return { error: `Файл не найден (404): \`${path}\` в репозитории ${repo}` };
+    if (!res.ok) return { error: `GitHub API вернул HTTP ${res.status} для \`${path}\`` };
+
+    let data: { content?: string; type?: string; message?: string };
+    try { data = await res.json(); } catch { return { error: `Не удалось разобрать ответ GitHub для \`${path}\`` }; }
+
+    if (data.message) return { error: `GitHub: ${data.message}` };
+    if (!data.content) return { error: `Файл \`${path}\` пуст или является директорией` };
+
+    // Корректное декодирование base64 → UTF-8 (работает с кириллицей и любыми символами)
+    try {
+      const b64 = data.content.replace(/\s/g, "");
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      return { content: new TextDecoder("utf-8").decode(bytes) };
+    } catch (e) {
+      return { error: `Ошибка декодирования файла \`${path}\`: ${String(e)}` };
+    }
   };
 
   const handleSendChat = useCallback(async (text: string) => {
@@ -726,18 +748,22 @@ ${PROJECT_STRUCTURE}`;
         // action: read_multiple
         if (actionData.action === "read_multiple" && actionData.paths?.length) {
           const filesContent: string[] = [];
+          const errors: string[] = [];
           for (let i = 0; i < actionData.paths.length; i++) {
             const p = actionData.paths[i];
             setCycleLabel(`Читаю файл ${i + 1}/${actionData.paths.length}: ${p}`);
-            const content = await readFileFromGitHub(p, token, repo, branch);
-            if (content !== null) {
-              const sizeStr = content.length < 1024 ? `${content.length} байт` : `${(content.length / 1024).toFixed(1)} КБ`;
-              filesContent.push(`### ${p} (${sizeStr})\n\`\`\`\n${content.slice(0, 8000)}${content.length > 8000 ? "\n... [обрезан для экономии]" : ""}\n\`\`\``);
+            const result = await readFileFromGitHub(p, token, repo, branch);
+            if (result.content !== undefined) {
+              const sizeStr = result.content.length < 1024 ? `${result.content.length} байт` : `${(result.content.length / 1024).toFixed(1)} КБ`;
+              const body = result.content.length > 8000 ? result.content.slice(0, 8000) + "\n... [обрезан]" : result.content;
+              filesContent.push(`### ${p} (${sizeStr})\n\`\`\`\n${body}\n\`\`\``);
             } else {
-              filesContent.push(`### ${p}\n[файл не найден]`);
+              errors.push(`⚠️ ${p}: ${result.error}`);
+              filesContent.push(`### ${p}\n[${result.error}]`);
             }
           }
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов). Анализирую...`.trim() }]);
+          const errNote = errors.length ? `\n\n${errors.join("\n")}` : "";
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов).${errNote}\nАнализирую...`.trim() }]);
           setCycleLabel(`Анализирую ${filesContent.length} файлов...`);
           const response2 = await callAI(chatSystemPrompt, `Файлы:\n\n${filesContent.join("\n\n")}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
           setCycleStatus("done"); setCycleLabel("");
@@ -748,10 +774,10 @@ ${PROJECT_STRUCTURE}`;
         // action: read (один файл)
         if (actionData.action === "read" && actionData.path) {
           setCycleLabel(`Читаю ${actionData.path}...`);
-          const fileContent = await readFileFromGitHub(actionData.path, token, repo, branch);
-          if (fileContent !== null) {
-            const sizeStr = fileContent.length < 1024 ? `${fileContent.length} байт` : `${(fileContent.length / 1024).toFixed(1)} КБ`;
-            const truncated = fileContent.length > 8000 ? fileContent.slice(0, 8000) + "\n... [обрезан]" : fileContent;
+          const result = await readFileFromGitHub(actionData.path, token, repo, branch);
+          if (result.content !== undefined) {
+            const sizeStr = result.content.length < 1024 ? `${result.content.length} байт` : `${(result.content.length / 1024).toFixed(1)} КБ`;
+            const truncated = result.content.length > 8000 ? result.content.slice(0, 8000) + "\n... [обрезан]" : result.content;
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
             setCycleLabel("Анализирую...");
             const response2 = await callAI(chatSystemPrompt, `Файл \`${actionData.path}\`:\n\`\`\`\n${truncated}\n\`\`\`\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
@@ -759,7 +785,7 @@ ${PROJECT_STRUCTURE}`;
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           } else {
             setCycleStatus("error"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать \`${actionData.path}\` — файл не найден.`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ ${result.error}`.trim() }]);
           }
           return;
         }
@@ -826,6 +852,15 @@ ${PROJECT_STRUCTURE}`;
     const engineRepo = ghSettings.engineRepo;
     const engineBranch = ghSettings.engineBranch || "main";
 
+    // Проверяем обязательные настройки Engine
+    if (!engineToken || !engineRepo) {
+      setMessages(prev => [...prev, {
+        id: ++msgCounter, role: "assistant",
+        text: "⚠️ Self-Edit Mode: не настроен Engine-репозиторий или токен.\n\nОткройте **Настройки → Self-Edit / Engine GitHub** и заполните:\n- Engine Token (GitHub Personal Access Token)\n- Engine Repository (например: `your-user/your-repo`)\n- Engine Branch (обычно `main`)",
+      }]);
+      return;
+    }
+
     setCycleStatus("generating");
     setCycleLabel("Self-Edit: думаю...");
     try {
@@ -863,31 +898,38 @@ ${PROJECT_STRUCTURE}`;
           for (let i = 0; i < actionData.paths.length; i++) {
             const p = actionData.paths[i];
             setCycleLabel(`Self-Edit: читаю ${i + 1}/${actionData.paths.length}...`);
-            const content = await readFileFromGitHub(p, engineToken, engineRepo, engineBranch);
-            if (content !== null) {
-              const sizeStr = content.length < 1024 ? `${content.length} байт` : `${(content.length / 1024).toFixed(1)} КБ`;
-              filesContent.push(`### ${p} (${sizeStr})\n\`\`\`\n${content}\n\`\`\``);
+            const result = await readFileFromGitHub(p, engineToken, engineRepo, engineBranch);
+            if (result.content !== undefined) {
+              const sizeStr = result.content.length < 1024 ? `${result.content.length} байт` : `${(result.content.length / 1024).toFixed(1)} КБ`;
+              const body = result.content.length > 8000 ? result.content.slice(0, 8000) + "\n... [обрезан]" : result.content;
+              filesContent.push(`### ${p} (${sizeStr})\n\`\`\`\n${body}\n\`\`\``);
             } else {
-              filesContent.push(`### ${p}\n[файл не найден]`);
+              filesContent.push(`### ${p}\n[${result.error}]`);
             }
           }
           setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов). Анализирую...`.trim() }]);
-          const response2 = await callAI(systemPrompt, `Содержимое файлов:\n\n${filesContent.join("\n\n")}\n\nТеперь выполни запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), false);
+          const response2 = await callAI(systemPrompt, `Содержимое файлов:\n\n${filesContent.join("\n\n")}\n\nТеперь выполни запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
           setCycleStatus("done"); setCycleLabel("");
           setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           return;
         }
 
         if (actionData.action === "read" && actionData.path) {
-          setCycleLabel("Self-Edit: читаю файл...");
-          const fileContent = await readFileFromGitHub(actionData.path, engineToken, engineRepo, engineBranch);
-          if (fileContent !== null) {
-            const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
-            const sizeStr = fileContent.length < 1024 ? `${fileContent.length} байт` : `${(fileContent.length / 1024).toFixed(1)} КБ`;
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${sizeStr}). Продолжаю...`.trim() }]);
-            const response2 = await callAI(systemPrompt, `Файл ${actionData.path}:\n\`\`\`\n${fileContent}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
+          setCycleLabel(`Self-Edit: читаю ${actionData.path}...`);
+          const result = await readFileFromGitHub(actionData.path, engineToken, engineRepo, engineBranch);
+          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+          if (result.content !== undefined) {
+            const sizeStr = result.content.length < 1024 ? `${result.content.length} байт` : `${(result.content.length / 1024).toFixed(1)} КБ`;
+            const body = result.content.length > 8000 ? result.content.slice(0, 8000) + "\n... [обрезан]" : result.content;
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n📄 \`${actionData.path}\` (${sizeStr}) — прочитан. Анализирую...`.trim() }]);
+            setCycleLabel("Self-Edit: анализирую...");
+            const response2 = await callAI(systemPrompt, `Файл ${actionData.path}:\n\`\`\`\n${body}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+            return;
+          } else {
+            setCycleStatus("error"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ ${result.error}`.trim() }]);
             return;
           }
         }
