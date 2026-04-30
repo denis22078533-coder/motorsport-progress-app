@@ -9,40 +9,40 @@ interface Props {
 
 const BANNERS = [
   {
-    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/5bf45b05-5a08-4c44-9a8e-be8abca0d706.jpg",
-    overlay: "from-[#1a0533]/80 via-[#7c3aed]/40 to-transparent",
+    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/eefa5a03-322c-47bd-b82a-48e1d9123312.jpg",
+    overlay: "from-black/75 via-[#7c3aed]/30 to-transparent",
     tag: "🛒 Интернет-магазины",
     title: "Магазин за 5 минут",
     subtitle: "Каталог, корзина, оплата, доставка — всё под ключ",
     accent: "#a855f7",
   },
   {
-    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/38529868-d995-456c-8f06-0ca4f6567d01.jpg",
-    overlay: "from-[#001233]/80 via-[#1d4ed8]/40 to-transparent",
+    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/f11c29eb-3ac0-47fe-a355-e563a67b6377.jpg",
+    overlay: "from-black/75 via-[#1d4ed8]/30 to-transparent",
     tag: "🎓 Школьные платформы",
     title: "Чат для класса",
     subtitle: "Расписание, задания, чат учителей и учеников",
     accent: "#3b82f6",
   },
   {
-    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/76712c41-bba1-46ad-a2b6-0ca9752296fa.jpg",
-    overlay: "from-[#00140f]/80 via-[#0d9488]/40 to-transparent",
+    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/87df7a6c-4530-4f9f-960f-a1f3cf583d3c.jpg",
+    overlay: "from-black/75 via-[#0d9488]/30 to-transparent",
     tag: "💼 Для бизнеса",
     title: "Сайт компании",
     subtitle: "Аналитика, CRM, заявки — всё в одном дашборде",
     accent: "#14b8a6",
   },
   {
-    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/2e8984f2-9471-4b6d-bf32-77c7b2ee2361.jpg",
-    overlay: "from-[#1a0020]/80 via-[#ec4899]/40 to-transparent",
+    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/32609ce6-61ca-4c9b-9669-d372bd88c333.jpg",
+    overlay: "from-black/75 via-[#ec4899]/25 to-transparent",
     tag: "🚀 AI-разработка",
     title: "Сайты за минуты",
     subtitle: "Опишите идею — Муравей построит без единой строки кода",
     accent: "#f43f5e",
   },
   {
-    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/5bf45b05-5a08-4c44-9a8e-be8abca0d706.jpg",
-    overlay: "from-[#0f1200]/80 via-[#f59e0b]/40 to-transparent",
+    image: "https://cdn.poehali.dev/projects/4fe9d363-5216-44d6-8799-40a6f4aeed69/files/7a2fb561-f60c-40a3-948f-d67a8cb043d2.jpg",
+    overlay: "from-black/75 via-[#f59e0b]/25 to-transparent",
     tag: "📱 Мобильные приложения",
     title: "Приложения любой сложности",
     subtitle: "От лендинга до полноценного веб-приложения с базой данных",
@@ -112,25 +112,34 @@ function AntBackground() {
   );
 }
 
-// Хук для автопрокрутки с паузой при касании
+// Хук автопрокрутки — сбрасывает таймер при ручной смене слайда
 function useAutoplay(total: number, interval = 4000) {
   const [current, setCurrent] = useState(0);
-  const paused = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCurrent(c => (c + 1) % total);
+    }, interval);
+  };
 
   useEffect(() => {
-    const t = setInterval(() => {
-      if (!paused.current) setCurrent(c => (c + 1) % total);
-    }, interval);
-    return () => clearInterval(t);
+    startTimer();
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total, interval]);
 
-  const pause = () => { paused.current = true; };
-  const resume = () => { paused.current = false; };
-  return { current, setCurrent, pause, resume };
+  const goTo = (i: number) => {
+    setCurrent(i);
+    startTimer(); // сбрасываем таймер — не прыгаем сразу после ручного тапа
+  };
+
+  return { current, goTo };
 }
 
 export default function HomePage({ onGoToChat, onGoToProjects: _onGoToProjects, onGoToProfile: _onGoToProfile }: Props) {
-  const { current, setCurrent, pause, resume } = useAutoplay(BANNERS.length);
+  const { current, goTo } = useAutoplay(BANNERS.length, 3800);
   const banner = BANNERS[current];
 
   return (
@@ -161,13 +170,7 @@ export default function HomePage({ onGoToChat, onGoToProjects: _onGoToProjects, 
       </div>
 
       {/* Banner carousel с фото */}
-      <div
-        className="shrink-0 relative mx-3 mt-3 rounded-2xl overflow-hidden h-56"
-        onTouchStart={pause}
-        onTouchEnd={resume}
-        onMouseEnter={pause}
-        onMouseLeave={resume}
-      >
+      <div className="shrink-0 relative mx-3 mt-3 rounded-2xl overflow-hidden h-56">
         <AnimatePresence mode="wait">
           <motion.div
             key={current}
@@ -209,11 +212,11 @@ export default function HomePage({ onGoToChat, onGoToProjects: _onGoToProjects, 
                   {BANNERS.map((_, i) => (
                     <button
                       key={i}
-                      onClick={() => setCurrent(i)}
-                      className="h-1 rounded-full transition-all"
+                      onClick={() => goTo(i)}
+                      className="h-1.5 rounded-full transition-all duration-300"
                       style={{
                         background: i === current ? "#fff" : "rgba(255,255,255,0.35)",
-                        width: i === current ? 20 : 6,
+                        width: i === current ? 22 : 7,
                       }}
                     />
                   ))}
