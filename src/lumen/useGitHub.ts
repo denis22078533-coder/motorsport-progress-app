@@ -63,7 +63,10 @@ export function useGitHub() {
         return { ok: false, html: "", sha: "", filePath: path, message: `GitHub HTTP ${res.status}: ${errData.message || "неизвестная ошибка"}` };
       }
       const data = await res.json() as { content: string; sha: string };
-      const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+      // Правильное base64 → UTF-8 через TextDecoder
+      const b64 = data.content.replace(/\s/g, "");
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const decoded = new TextDecoder("utf-8").decode(bytes);
       return { ok: true, html: decoded, sha: data.sha, filePath: path };
     } catch (e) {
       return { ok: false, html: "", sha: "", filePath: path, message: String(e) };
@@ -93,7 +96,14 @@ export function useGitHub() {
       }
     } catch (_e) { /* файл новый */ }
 
-    const content = btoa(unescape(encodeURIComponent(html)));
+    // Правильное UTF-8 → base64 через TextEncoder (btoa(unescape(...)) ломается на больших файлах)
+    const utf8Bytes = new TextEncoder().encode(html);
+    const b64Chunks: string[] = [];
+    const chunkSize = 8192;
+    for (let i = 0; i < utf8Bytes.length; i += chunkSize) {
+      b64Chunks.push(String.fromCharCode(...utf8Bytes.slice(i, i + chunkSize)));
+    }
+    const content = btoa(b64Chunks.join(""));
 
     const doPut = async (shaToUse: string) => {
       const reqBody: Record<string, string> = {

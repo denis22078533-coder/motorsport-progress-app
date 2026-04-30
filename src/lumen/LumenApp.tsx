@@ -935,21 +935,72 @@ ${PROJECT_STRUCTURE}`;
         }
 
         if (actionData.action === "write" && actionData.path && actionData.content) {
-          setCycleLabel("Self-Edit: сохраняю файл...");
-          const apiUrl = `https://api.github.com/repos/${engineRepo}/contents/${actionData.path}`;
-          // Получаем текущий SHA
+          setCycleLabel(`Self-Edit: сохраняю ${actionData.path}...`);
+          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+          const apiUrl = `https://api.github.com/repos/${engineRepo}/contents/${encodeURIComponent(actionData.path).replace(/%2F/g, "/")}`;
+
+          // Получаем текущий SHA (нужен для обновления существующего файла)
           let sha = "";
           try {
-            const getRes = await fetch(`${apiUrl}?ref=${engineBranch}`, { headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json" } });
-            if (getRes.ok) { const d = await getRes.json() as { sha: string }; sha = d.sha; }
-          } catch { /* новый файл */ }
-          const content = btoa(unescape(encodeURIComponent(actionData.content)));
-          const reqBody: Record<string, string> = { message: `Lumen Self-Edit: обновил ${actionData.path}`, content, branch: engineBranch };
+            const getRes = await fetch(`${apiUrl}?ref=${encodeURIComponent(engineBranch)}`, {
+              headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json" },
+            });
+            if (getRes.ok) {
+              const d = await getRes.json() as { sha?: string };
+              sha = d.sha || "";
+            } else if (getRes.status !== 404) {
+              const d = await getRes.json().catch(() => ({})) as { message?: string };
+              setCycleStatus("error"); setCycleLabel("");
+              setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ Ошибка получения SHA файла \`${actionData.path}\`: HTTP ${getRes.status} ${d.message || ""}`.trim() }]);
+              return;
+            }
+          } catch (e) {
+            setCycleStatus("error"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ Сетевая ошибка при чтении SHA: ${String(e)}`.trim() }]);
+            return;
+          }
+
+          // Правильное кодирование UTF-8 → base64 через TextEncoder
+          const utf8Bytes = new TextEncoder().encode(actionData.content);
+          const b64Chunks: string[] = [];
+          const chunkSize = 8192;
+          for (let i = 0; i < utf8Bytes.length; i += chunkSize) {
+            b64Chunks.push(String.fromCharCode(...utf8Bytes.slice(i, i + chunkSize)));
+          }
+          const contentB64 = btoa(b64Chunks.join(""));
+
+          const reqBody: Record<string, string> = {
+            message: `Муравей: обновил ${actionData.path}`,
+            content: contentB64,
+            branch: engineBranch,
+          };
           if (sha) reqBody.sha = sha;
-          const putRes = await fetch(apiUrl, { method: "PUT", headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
-          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+
+          let putRes: Response;
+          try {
+            putRes = await fetch(apiUrl, {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${engineToken}`,
+                Accept: "application/vnd.github+json",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(reqBody),
+            });
+          } catch (e) {
+            setCycleStatus("error"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ Сетевая ошибка при записи файла: ${String(e)}`.trim() }]);
+            return;
+          }
+
+          const putData = await putRes.json().catch(() => ({})) as { message?: string; content?: { html_url?: string } };
           setCycleStatus(putRes.ok ? "done" : "error"); setCycleLabel("");
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: putRes.ok ? `${cleanResponse}\n\nФайл \`${actionData.path}\` успешно обновлён в ${engineRepo}.` : `${cleanResponse}\n\nОшибка сохранения файла: HTTP ${putRes.status}` }]);
+          if (putRes.ok) {
+            const fileUrl = putData.content?.html_url ? `\n🔗 ${putData.content.html_url}` : "";
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n✅ Файл \`${actionData.path}\` записан в \`${engineRepo}\` (ветка \`${engineBranch}\`).${fileUrl}`.trim() }]);
+          } else {
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ Ошибка записи \`${actionData.path}\`: HTTP ${putRes.status} — ${putData.message || "неизвестная ошибка"}`.trim() }]);
+          }
           return;
         }
       }
