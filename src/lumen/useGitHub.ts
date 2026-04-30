@@ -139,7 +139,7 @@ export function useGitHub() {
     }
   }, [ghSettings]);
 
-  // ── Engine Sync — загружает весь репозиторий платформы через backend ────────
+  // ── Engine Push — выгружает исходники платформы в GitHub репозиторий ──────
   const syncEngine = useCallback(async (
     onProgress?: (msg: string) => void
   ): Promise<{ ok: boolean; message: string }> => {
@@ -150,33 +150,23 @@ export function useGitHub() {
     if (!token) return { ok: false, message: "Укажите Engine GitHub Token в настройках" };
     if (!repo) return { ok: false, message: "Укажите Engine Repository (например: user/moi-lumin)" };
 
-    onProgress?.("Скачиваю архив платформы...");
+    onProgress?.("Выгружаю файлы платформы в GitHub...");
 
     const res = await fetch(GITHUB_DOWNLOAD_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, repo, branch }),
+      body: JSON.stringify({ action: "push", token, repo, branch }),
     });
-    const data = await res.json() as { zip_b64?: string; size?: number; error?: string };
-    if (!res.ok || !data.zip_b64) throw new Error(data.error || `HTTP ${res.status}`);
+    const data = await res.json() as { ok?: boolean; pushed?: number; total?: number; errors?: string[]; message?: string; error?: string };
+    if (!res.ok || !data.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
 
-    onProgress?.("Распаковываю архив...");
-
-    const binary = atob(data.zip_b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: "application/zip" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const repoName = repo.split("/")[1] || "engine-source";
-    a.href = url;
-    a.download = `${repoName}-engine.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const errNote = data.errors && data.errors.length > 0
+      ? `\n\nПропущено файлов: ${data.errors.length}. Первые ошибки:\n${data.errors.slice(0, 3).join("\n")}`
+      : "";
 
     return {
       ok: true,
-      message: `Архив платформы скачан: ${repoName}-engine.zip (${Math.round((data.size || 0) / 1024)} КБ)\n/src, /backend и все конфиги внутри. Для запуска: npm install → npm run build.`,
+      message: `${data.message || "Выгрузка завершена"}${errNote}\n\nРепозиторий: ${repo} (ветка ${branch})`,
     };
   }, [ghSettings]);
 

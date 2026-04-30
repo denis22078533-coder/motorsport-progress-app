@@ -7,17 +7,13 @@ interface Props {
   previewHtml: string | null;
   liveUrl?: string;
   onApplyToGitHub?: () => Promise<void>;
-  onDownload?: () => void;
   onUndo?: () => void;
   canUndo?: boolean;
-  onLoadFile?: () => void;
-  onLoadZip?: () => void;
-  convertingZip?: boolean;
 }
 
 const GRID_SIZE = 32;
 
-export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onDownload, onUndo, canUndo, onLoadFile, onLoadZip, convertingZip }: Props) {
+export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGitHub, onUndo, canUndo }: Props) {
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -43,31 +39,6 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
 
       {/* Action Bar — всегда видимый */}
       <div className="shrink-0 z-10 flex items-center gap-1.5 px-3 py-2 bg-[#0d0d18] border-b border-white/[0.07] flex-wrap">
-
-        {/* Загрузить HTML */}
-        <button
-          onClick={onLoadFile}
-          title="Загрузить готовый index.html"
-          className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all bg-cyan-500/15 border border-cyan-500/30 hover:bg-cyan-500/25 hover:border-cyan-500/50 text-cyan-400 hover:text-cyan-300"
-        >
-          <Icon name="FileCode" size={11} />
-          HTML
-        </button>
-
-        {/* Загрузить ZIP проект */}
-        <button
-          onClick={onLoadZip}
-          disabled={convertingZip}
-          title="Загрузить ZIP с index.html внутри (например Скачать билд из poehali.dev)"
-          className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
-            convertingZip
-              ? "bg-violet-500/10 border border-violet-500/20 text-violet-400/50 cursor-wait"
-              : "bg-violet-500/15 border border-violet-500/30 hover:bg-violet-500/25 hover:border-violet-500/50 text-violet-400 hover:text-violet-300"
-          }`}
-        >
-          <Icon name={convertingZip ? "Loader" : "PackageOpen"} size={11} className={convertingZip ? "animate-spin" : ""} />
-          {convertingZip ? "Читаю..." : "Загрузить ZIP код"}
-        </button>
 
         {/* Отменить */}
         <button
@@ -98,20 +69,6 @@ export default function LivePreview({ status, previewHtml, liveUrl, onApplyToGit
         >
           <Icon name={applying ? "Loader" : "Upload"} size={11} className={applying ? "animate-spin" : ""} />
           {applying ? "Сохраняю..." : "В GitHub"}
-        </button>
-
-        {/* Скачать */}
-        <button
-          onClick={onDownload}
-          disabled={!hasPreview || !onDownload}
-          className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold transition-all ${
-            hasPreview && onDownload
-              ? "bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300"
-              : "bg-white/[0.02] border border-white/[0.04] text-white/15 cursor-not-allowed"
-          }`}
-        >
-          <Icon name="Download" size={11} />
-          Скачать index.html
         </button>
 
         {/* Живая ссылка */}

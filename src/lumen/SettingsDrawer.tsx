@@ -22,6 +22,8 @@ interface Props {
   onSelfEditToggle: (v: boolean) => void;
   onSyncEngine?: () => void;
   syncingEngine?: boolean;
+  onLoadZip?: () => void;
+  convertingZip?: boolean;
 }
 
 const MODELS = {
@@ -57,7 +59,7 @@ const label = "text-white/40 text-xs font-medium uppercase tracking-wider block 
 
 export default function SettingsDrawer({
   open, onClose, settings, onSave, ghSettings, onSaveGh,
-  selfEditMode, onSelfEditToggle, onSyncEngine, syncingEngine,
+  selfEditMode, onSelfEditToggle, onSyncEngine, syncingEngine, onLoadZip, convertingZip,
 }: Props) {
   const [tab, setTab] = useState<Tab>("ai");
   const [form, setForm] = useState(settings);
@@ -364,20 +366,47 @@ export default function SettingsDrawer({
                     </div>
                   </div>
 
-                  {/* Sync Engine кнопка */}
+                  {/* Выгрузить в GitHub */}
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => { handleSave(); onSyncEngine?.(); }}
                     disabled={syncingEngine || (!ghForm.engineRepo && !ghForm.repo)}
                     className="w-full h-10 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.15] text-emerald-400 text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40"
                   >
-                    <Icon name={syncingEngine ? "Loader" : "FolderDown"} size={15} className={syncingEngine ? "animate-spin" : ""} />
-                    {syncingEngine ? "Скачиваю..." : "Sync Engine — скачать исходники платформы"}
+                    <Icon name={syncingEngine ? "Loader" : "GitBranch"} size={15} className={syncingEngine ? "animate-spin" : ""} />
+                    {syncingEngine ? "Выгружаю..." : "Выгрузить платформу в GitHub"}
                   </motion.button>
 
                   <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3.5">
-                    <p className="text-white/20 text-xs font-semibold uppercase tracking-wider mb-1.5">Что скачивает Sync Engine</p>
-                    <p className="text-white/25 text-xs leading-relaxed">Полный ZIP архив: /src (React компоненты), /backend (Python функции), package.json, vite.config.ts, tailwind.config.ts. Для запуска: npm install → npm run build.</p>
+                    <p className="text-white/20 text-xs font-semibold uppercase tracking-wider mb-1.5">Что выгружает кнопка</p>
+                    <p className="text-white/25 text-xs leading-relaxed">Пушит /src, /backend, package.json, vite.config.ts, tailwind.config.ts в указанный Engine Repository на GitHub.</p>
+                  </div>
+
+                  {/* Разделитель */}
+                  <div className="border-t border-white/[0.06]" />
+
+                  {/* Загрузить ZIP код */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                        <Icon name="PackageOpen" size={11} className="text-violet-400" />
+                      </div>
+                      <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">Загрузить ZIP-проект</span>
+                    </div>
+                    <button
+                      onClick={onLoadZip}
+                      disabled={convertingZip}
+                      title="Загрузить ZIP с index.html внутри"
+                      className={`w-full h-10 rounded-xl border text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
+                        convertingZip
+                          ? "bg-violet-500/10 border-violet-500/20 text-violet-400/50 cursor-wait"
+                          : "bg-violet-500/[0.08] border-violet-500/30 hover:bg-violet-500/[0.15] text-violet-400"
+                      }`}
+                    >
+                      <Icon name={convertingZip ? "Loader" : "Upload"} size={15} className={convertingZip ? "animate-spin" : ""} />
+                      {convertingZip ? "Читаю ZIP..." : "Загрузить ZIP код"}
+                    </button>
+                    <p className="text-white/20 text-xs mt-2 leading-relaxed">ZIP-архив с index.html внутри (например, билд из poehali.dev). ИИ конвертирует в React-проект.</p>
                   </div>
                 </>
               )}

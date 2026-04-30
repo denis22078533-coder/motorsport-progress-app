@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Icon from "@/components/ui/icon";
 import { Message } from "./LumenApp";
@@ -74,6 +74,8 @@ export default function ChatPanel({
   const [kbOffset, setKbOffset] = useState(0);
   const [lastMode, setLastMode] = useState<ChatMode>("chat");
   const [sqlCopied, setSqlCopied] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; content: string; type: "image" | "text" } | null>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   const handleCopySql = () => {
     if (!pendingSql) return;
@@ -102,11 +104,44 @@ export default function ChatPanel({
   const detectedMode = value.trim() ? detectMode(value) : lastMode;
   const activeColor = MODE_COLORS[detectedMode];
 
+  const handleAttachFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const isImage = file.type.startsWith("image/");
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        setAttachedFile({ name: file.name, content: dataUrl, type: "image" });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        setAttachedFile({ name: file.name, content: text, type: "text" });
+      };
+      reader.readAsText(file, "utf-8");
+    }
+  }, []);
+
   const handleSend = () => {
-    if (!value.trim() || isActive) return;
-    const mode = detectMode(value.trim());
+    if ((!value.trim() && !attachedFile) || isActive) return;
+    let sendText = value.trim();
+    if (attachedFile) {
+      if (attachedFile.type === "image") {
+        sendText = `[Прикреплено изображение: ${attachedFile.name}]\n${sendText}`;
+      } else {
+        const preview = attachedFile.content.length > 3000 ? attachedFile.content.slice(0, 3000) + "\n...[обрезано]" : attachedFile.content;
+        sendText = `Файл "${attachedFile.name}":\n\`\`\`\n${preview}\n\`\`\`\n${sendText}`;
+      }
+      setAttachedFile(null);
+    }
+    if (!sendText) return;
+    const mode = detectMode(sendText);
     setLastMode(mode);
-    onSend(value.trim(), mode);
+    onSend(sendText, mode);
     setValue("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
@@ -358,6 +393,39 @@ export default function ChatPanel({
 
       {/* Input */}
       <div className="px-3 pb-3 pt-2 shrink-0 border-t border-white/[0.06]">
+        {/* Hidden file input for attachments */}
+        <input
+          ref={attachInputRef}
+          type="file"
+          accept="image/*,.txt,.md,.html,.css,.js,.ts,.tsx,.jsx,.json,.py,.sql,.csv"
+          className="hidden"
+          onChange={handleAttachFile}
+        />
+
+        {/* Attached file preview */}
+        <AnimatePresence>
+          {attachedFile && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              className="mb-2 flex items-center gap-2 bg-white/[0.05] border border-white/[0.10] rounded-lg px-2.5 py-1.5"
+            >
+              {attachedFile.type === "image" ? (
+                <img src={attachedFile.content} alt={attachedFile.name} className="w-8 h-8 rounded object-cover shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded bg-white/[0.06] flex items-center justify-center shrink-0">
+                  <Icon name="FileText" size={14} className="text-white/40" />
+                </div>
+              )}
+              <span className="text-white/60 text-xs truncate flex-1">{attachedFile.name}</span>
+              <button onClick={() => setAttachedFile(null)} className="text-white/30 hover:text-white/70 transition-colors">
+                <Icon name="X" size={13} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Mode hint */}
         <AnimatePresence>
           {modeHint && (
@@ -375,8 +443,18 @@ export default function ChatPanel({
 
         <div
           className="flex items-end gap-2 bg-white/[0.04] border rounded-xl px-3 py-2.5 transition-all duration-300"
-          style={{ borderColor: value.trim() ? activeColor + "50" : "rgba(255,255,255,0.08)" }}
+          style={{ borderColor: (value.trim() || attachedFile) ? activeColor + "50" : "rgba(255,255,255,0.08)" }}
         >
+          {/* Attach button */}
+          <button
+            onClick={() => attachInputRef.current?.click()}
+            disabled={isActive}
+            className="shrink-0 mb-0.5 w-6 h-6 rounded-md flex items-center justify-center text-white/25 hover:text-white/60 hover:bg-white/[0.08] transition-colors disabled:opacity-30"
+            title="Прикрепить файл или фото"
+          >
+            <Icon name="Plus" size={13} />
+          </button>
+
           <motion.div className="shrink-0 mb-0.5 opacity-50" animate={{ color: activeColor }} transition={{ duration: 0.3 }}>
             <Icon name={detectedMode === "image" ? "Image" : detectedMode === "site" ? "Globe" : "MessageCircle"} size={14} />
           </motion.div>
@@ -393,9 +471,9 @@ export default function ChatPanel({
           />
           <motion.button
             onClick={handleSend}
-            disabled={!value.trim() || isActive}
+            disabled={(!value.trim() && !attachedFile) || isActive}
             className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-white disabled:opacity-25 transition-all mb-0.5"
-            animate={{ backgroundColor: value.trim() && !isActive ? activeColor : "rgba(255,255,255,0.08)" }}
+            animate={{ backgroundColor: (value.trim() || attachedFile) && !isActive ? activeColor : "rgba(255,255,255,0.08)" }}
             transition={{ duration: 0.3 }}
             whileTap={{ scale: 0.9 }}
           >

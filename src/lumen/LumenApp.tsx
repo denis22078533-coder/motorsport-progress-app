@@ -1073,10 +1073,6 @@ ${urlList}
           <LumenTopBar
             status={topStatus}
             cycleLabel={cycleLabel}
-            onNewProject={handleNewProject}
-            onExport={handleExport}
-            onExportSource={(ghSettings.engineRepo || ghSettings.repo) ? handleSyncEngine : undefined}
-            exportingSource={syncingEngine}
             selfEditActive={selfEditMode}
             onSettings={() => setSettingsOpen(true)}
             onLogout={logout}
@@ -1186,12 +1182,8 @@ ${urlList}
                 previewHtml={previewHtml}
                 liveUrl={liveUrl}
                 onApplyToGitHub={ghSettings.token && ghSettings.repo ? handleApplyToGitHub : undefined}
-                onDownload={previewHtml ? handleExport : undefined}
                 onUndo={htmlHistory.length > 0 ? handleUndo : undefined}
                 canUndo={htmlHistory.length > 0}
-                onLoadFile={() => fileInputRef.current?.click()}
-                onLoadZip={() => zipInputRef.current?.click()}
-                convertingZip={convertingZip}
               />
             </div>
           </div>
@@ -1207,6 +1199,8 @@ ${urlList}
             onSelfEditToggle={handleSelfEditToggle}
             onSyncEngine={handleSyncEngine}
             syncingEngine={syncingEngine}
+            onLoadZip={() => zipInputRef.current?.click()}
+            convertingZip={convertingZip}
           />
         </motion.div>
       )}

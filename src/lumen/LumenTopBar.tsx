@@ -4,8 +4,8 @@ import Icon from "@/components/ui/icon";
 interface Props {
   status: "idle" | "generating" | "done" | "error";
   cycleLabel?: string;
-  onNewProject: () => void;
-  onExport: () => void;
+  onNewProject?: () => void;
+  onExport?: () => void;
   onExportSource?: () => void;
   exportingSource?: boolean;
   selfEditActive?: boolean;
@@ -20,7 +20,7 @@ const STATUS_MAP = {
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onExportSource, exportingSource, selfEditActive, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, selfEditActive, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -61,37 +61,6 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport
             <span className="text-amber-400 text-[10px] font-semibold">Self-Edit</span>
           </div>
         )}
-        {onExportSource && (
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={onExportSource}
-            disabled={exportingSource}
-            title="Sync Engine — скачать исходники платформы (ZIP)"
-            className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-emerald-500/30 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12] text-emerald-400/70 hover:text-emerald-400 text-xs font-medium transition-colors disabled:opacity-40"
-          >
-            <Icon name={exportingSource ? "Loader" : "GitBranch"} size={12} className={exportingSource ? "animate-spin" : ""} />
-            <span className="hidden lg:inline">Sync Engine</span>
-          </motion.button>
-        )}
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onExport}
-          className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white text-xs font-medium transition-colors"
-        >
-          <Icon name="Download" size={12} />
-          Скачать
-        </motion.button>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onNewProject}
-          className="flex items-center gap-1 h-7 px-2.5 rounded-md bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-colors"
-        >
-          <Icon name="Plus" size={13} />
-          <span className="hidden sm:inline">Новый</span>
-        </motion.button>
-
         <button
           onClick={onSettings}
           className="w-7 h-7 rounded-md flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
