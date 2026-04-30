@@ -536,7 +536,7 @@ export default function LumenApp() {
     return history;
   };
 
-  const callAI = async (systemPrompt: string, userText: string, onProgress?: (chars: number) => void, useHistory = false): Promise<string> => {
+  const callAI = async (systemPrompt: string, userText: string, onProgress?: (chars: number) => void, useHistory = false, timeoutMs = 120_000): Promise<string> => {
     const rawBase = (settings.baseUrl || "").trim().replace(/\/+$/, "");
     const baseUrl = rawBase || "https://proxyapi.ru";
     const isOpenAI = settings.provider === "openai";
@@ -569,14 +569,22 @@ export default function LumenApp() {
 
     const proxyUrl = (settings.proxyUrl || "").trim() || (import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba");
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     let res: Response;
     try {
       res = await fetch(proxyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
+        signal: controller.signal,
       });
     } catch (e) {
+      clearTimeout(timeoutId);
+      if ((e as Error)?.name === "AbortError") {
+        throw new Error(`Превышено время ожидания (${timeoutMs / 1000} сек). Попробуйте ещё раз или упростите запрос.`);
+      }
       throw new Error(`Сетевая ошибка: ${String(e)}`);
     }
 
@@ -585,31 +593,41 @@ export default function LumenApp() {
     const decoder = new TextDecoder();
     let rawText = "";
     if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        rawText += decoder.decode(value, { stream: true });
-        if (onProgress) onProgress(rawText.length);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          rawText += decoder.decode(value, { stream: true });
+          if (onProgress) onProgress(rawText.length);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        reader.releaseLock();
       }
     } else {
       rawText = await res.text();
+      clearTimeout(timeoutId);
     }
 
     let data: Record<string, unknown>;
     try { data = JSON.parse(rawText); } catch {
-      throw new Error(`Сервер вернул не JSON (HTTP ${res.status}): ${rawText.slice(0, 200)}`);
+      throw new Error(`Сервер вернул не JSON (HTTP ${res.status}): ${rawText.slice(0, 300)}`);
     }
 
     if (!res.ok || data.error) {
       const errMsg = data.error as { message?: string } | string | undefined;
       const detail = typeof errMsg === "string" ? errMsg : errMsg?.message;
-      throw new Error(`HTTP ${res.status}: ${detail || rawText.slice(0, 200)}`);
+      throw new Error(`HTTP ${res.status}: ${detail || rawText.slice(0, 300)}`);
     }
 
     if (isOpenAI) {
-      return (data.choices as { message: { content: string } }[])?.[0]?.message?.content ?? "";
+      const content = (data.choices as { message: { content: string } }[])?.[0]?.message?.content ?? "";
+      if (!content) throw new Error("ИИ вернул пустой ответ. Проверьте настройки модели.");
+      return content;
     } else {
-      return (data.content as { text: string }[])?.[0]?.text ?? "";
+      const content = (data.content as { text: string }[])?.[0]?.text ?? "";
+      if (!content) throw new Error("ИИ вернул пустой ответ. Проверьте настройки модели.");
+      return content;
     }
   };
 
@@ -662,10 +680,18 @@ export default function LumenApp() {
     const branch = ghSettings.branch || "main";
     try {
       const repoInfo = token && repo
-        ? `\n\nПодключён GitHub репозиторий: ${repo} (ветка: ${branch}). Если нужно прочитать файл из репозитория — используй action-блок:\n\`\`\`action\n{"action":"read","path":"src/App.tsx"}\n\`\`\``
+        ? `\n\nПодключён GitHub репозиторий: ${repo} (ветка: ${branch}).
+Доступны action-блоки для работы с файлами:
+- Список файлов в директории: \`{"action":"list","path":"src/lumen"}\`
+- Прочитать один файл: \`{"action":"read","path":"src/App.tsx"}\`
+- Прочитать несколько файлов сразу: \`{"action":"read_multiple","paths":["src/App.tsx","src/lumen/LumenApp.tsx"]}\`
+
+Отвечай только один action-блок за раз. После получения файлов — сразу выполни задачу.`
         : "";
-      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Lumen. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
+      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Муравей. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
 ${PROJECT_STRUCTURE}`;
+
+      // ── Шаг 1: первый вызов ИИ ────────────────────────────────────────────
       const response = await callAI(
         chatSystemPrompt,
         text,
@@ -673,32 +699,67 @@ ${PROJECT_STRUCTURE}`;
         true
       );
 
-      // Обрабатываем action read — ИИ хочет прочитать файл
+      // ── Шаг 2: обрабатываем action-блоки ─────────────────────────────────
       const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
       if (actionMatch && token && repo) {
-        let actionData: { action: string; path?: string };
+        let actionData: { action: string; path?: string; paths?: string[] };
         try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
+        const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
 
-        if (actionData.action === "read" && actionData.path) {
-          setCycleLabel("Читаю файл...");
-          const fileContent = await readFileFromGitHub(actionData.path, token, repo, branch);
-          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
-          if (fileContent !== null) {
-            const sizeStr = fileContent.length < 1024
-              ? `${fileContent.length} байт`
-              : `${(fileContent.length / 1024).toFixed(1)} КБ`;
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
-            const response2 = await callAI(
-              chatSystemPrompt,
-              `Файл \`${actionData.path}\`:\n\`\`\`\n${fileContent}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`,
-              (chars) => setCycleLabel(`Анализирую... ${chars} симв.`),
-              false
-            );
+        // action: list
+        if (actionData.action === "list" && actionData.path) {
+          setCycleLabel(`Читаю директорию ${actionData.path}...`);
+          const listing = await listDirFromGitHub(actionData.path, token, repo, branch);
+          if (listing) {
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nСодержимое \`${actionData.path}\`:\n\`\`\`\n${listing}\n\`\`\``.trim() }]);
+            setCycleLabel("Анализирую список...");
+            const response2 = await callAI(chatSystemPrompt, `Директория ${actionData.path}:\n${listing}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           } else {
             setCycleStatus("error"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать файл \`${actionData.path}\` — файл не найден или нет доступа.`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать директорию \`${actionData.path}\`.`.trim() }]);
+          }
+          return;
+        }
+
+        // action: read_multiple
+        if (actionData.action === "read_multiple" && actionData.paths?.length) {
+          const filesContent: string[] = [];
+          for (let i = 0; i < actionData.paths.length; i++) {
+            const p = actionData.paths[i];
+            setCycleLabel(`Читаю файл ${i + 1}/${actionData.paths.length}: ${p}`);
+            const content = await readFileFromGitHub(p, token, repo, branch);
+            if (content !== null) {
+              const sizeStr = content.length < 1024 ? `${content.length} байт` : `${(content.length / 1024).toFixed(1)} КБ`;
+              filesContent.push(`### ${p} (${sizeStr})\n\`\`\`\n${content.slice(0, 8000)}${content.length > 8000 ? "\n... [обрезан для экономии]" : ""}\n\`\`\``);
+            } else {
+              filesContent.push(`### ${p}\n[файл не найден]`);
+            }
+          }
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов). Анализирую...`.trim() }]);
+          setCycleLabel(`Анализирую ${filesContent.length} файлов...`);
+          const response2 = await callAI(chatSystemPrompt, `Файлы:\n\n${filesContent.join("\n\n")}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
+          setCycleStatus("done"); setCycleLabel("");
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          return;
+        }
+
+        // action: read (один файл)
+        if (actionData.action === "read" && actionData.path) {
+          setCycleLabel(`Читаю ${actionData.path}...`);
+          const fileContent = await readFileFromGitHub(actionData.path, token, repo, branch);
+          if (fileContent !== null) {
+            const sizeStr = fileContent.length < 1024 ? `${fileContent.length} байт` : `${(fileContent.length / 1024).toFixed(1)} КБ`;
+            const truncated = fileContent.length > 8000 ? fileContent.slice(0, 8000) + "\n... [обрезан]" : fileContent;
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
+            setCycleLabel("Анализирую...");
+            const response2 = await callAI(chatSystemPrompt, `Файл \`${actionData.path}\`:\n\`\`\`\n${truncated}\n\`\`\`\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
+            setCycleStatus("done"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          } else {
+            setCycleStatus("error"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать \`${actionData.path}\` — файл не найден.`.trim() }]);
           }
           return;
         }
