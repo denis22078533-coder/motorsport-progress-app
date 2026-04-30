@@ -158,19 +158,19 @@ export function useGitHub() {
     const branch = ghSettings.engineBranch || "main";
 
     if (!token) return { ok: false, message: "Укажите Engine GitHub Token в настройках" };
-    if (!targetRepo) return { ok: false, message: "Укажите Engine Repository (например: user/moi-lumin)" };
+    if (!targetRepo) return { ok: false, message: "Укажите Engine Repository (например: user/moi-umniy-lumin)" };
 
-    // Источник — тот же репозиторий откуда деплоится этот проект (denis22078533-coder/Lumin-platform)
-    // Или используем основной token+repo если engineRepo != repo
-    const sourceRepo = ghSettings.repo || targetRepo;
-    const sourceToken = ghSettings.token || token;
+    // Источник = Engine Repo (тот же репо куда пушим — читаем его текущее состояние)
+    // targetRepo и sourceRepo — одно и то же: moi-umniy-lumin
+    const sourceRepo = targetRepo;
+    const sourceToken = token;
 
-    // ── Шаг 1: скачиваем ZIP исходников через наш прокси-бэкенд ─────────────
-    onProgress?.("Скачиваю исходники проекта...");
+    // ── Шаг 1: скачиваем ZIP исходников из Engine Repo ───────────────────────
+    onProgress?.(`Скачиваю исходники из ${sourceRepo}...`);
     const zipRes = await fetch(GITHUB_DOWNLOAD_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "download", token: sourceToken, repo: sourceRepo, branch: "main" }),
+      body: JSON.stringify({ action: "download", token: sourceToken, repo: sourceRepo, branch }),
     });
     const zipData = await zipRes.json() as { zip_b64?: string; error?: string };
     if (!zipRes.ok || !zipData.zip_b64) {
