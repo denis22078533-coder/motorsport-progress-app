@@ -149,34 +149,140 @@ export function useGitHub() {
     }
   }, [ghSettings]);
 
-  // ── Engine Push — выгружает исходники платформы в GitHub репозиторий ──────
+  // ── Engine Push — скачивает ZIP текущего проекта из SOURCE_REPO и пушит в Engine-репо ──────
   const syncEngine = useCallback(async (
     onProgress?: (msg: string) => void
   ): Promise<{ ok: boolean; message: string }> => {
     const token = ghSettings.engineToken || ghSettings.token;
-    const repo = ghSettings.engineRepo;
+    const targetRepo = ghSettings.engineRepo;
     const branch = ghSettings.engineBranch || "main";
 
     if (!token) return { ok: false, message: "Укажите Engine GitHub Token в настройках" };
-    if (!repo) return { ok: false, message: "Укажите Engine Repository (например: user/moi-lumin)" };
+    if (!targetRepo) return { ok: false, message: "Укажите Engine Repository (например: user/moi-lumin)" };
 
-    onProgress?.("Выгружаю файлы платформы в GitHub...");
+    // Источник — тот же репозиторий откуда деплоится этот проект (denis22078533-coder/Lumin-platform)
+    // Или используем основной token+repo если engineRepo != repo
+    const sourceRepo = ghSettings.repo || targetRepo;
+    const sourceToken = ghSettings.token || token;
 
-    const res = await fetch(GITHUB_DOWNLOAD_URL, {
+    // ── Шаг 1: скачиваем ZIP исходников через наш прокси-бэкенд ─────────────
+    onProgress?.("Скачиваю исходники проекта...");
+    const zipRes = await fetch(GITHUB_DOWNLOAD_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "push", token, repo, branch }),
+      body: JSON.stringify({ action: "download", token: sourceToken, repo: sourceRepo, branch: "main" }),
     });
-    const data = await res.json() as { ok?: boolean; pushed?: number; total?: number; errors?: string[]; message?: string; error?: string };
-    if (!res.ok || !data.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+    const zipData = await zipRes.json() as { zip_b64?: string; error?: string };
+    if (!zipRes.ok || !zipData.zip_b64) {
+      throw new Error(zipData.error || `Не удалось скачать ZIP исходников (HTTP ${zipRes.status})`);
+    }
 
-    const errNote = data.errors && data.errors.length > 0
-      ? `\n\nПропущено файлов: ${data.errors.length}. Первые ошибки:\n${data.errors.slice(0, 3).join("\n")}`
+    // ── Шаг 2: распаковываем ZIP в браузере ──────────────────────────────────
+    onProgress?.("Распаковываю архив...");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const JSZip = (window as any).JSZip;
+    if (!JSZip) throw new Error("JSZip не загружен. Перезагрузите страницу и попробуйте снова.");
+
+    const zipBytes = Uint8Array.from(atob(zipData.zip_b64), c => c.charCodeAt(0));
+    const zip = await JSZip.loadAsync(zipBytes.buffer);
+
+    // Фильтруем файлы — включаем только нужные
+    const INCLUDE_DIRS = ["src/", "backend/", "db_migrations/", "public/"];
+    const INCLUDE_ROOT = ["package.json", "vite.config.ts", "vite.config.js",
+      "tailwind.config.ts", "tailwind.config.js", "tsconfig.json",
+      "tsconfig.app.json", "tsconfig.node.json", "postcss.config.js",
+      "postcss.config.cjs", "index.html"];
+    const SKIP_DIRS = ["node_modules/", ".git/", "dist/", "build/", "__pycache__/"];
+    const SKIP_EXT = [".pyc", ".pyo", ".log"];
+    const MAX_SIZE = 400 * 1024;
+
+    const filesToPush: { path: string; content_b64: string }[] = [];
+
+    // ZIP от GitHub содержит папку верхнего уровня типа "user-repo-sha123/"
+    // Нужно её убрать из путей
+    let stripPrefix = "";
+    zip.forEach((relativePath: string) => {
+      if (!stripPrefix && relativePath.includes("/")) {
+        stripPrefix = relativePath.split("/")[0] + "/";
+      }
+    });
+
+     
+    const filePromises: Promise<void>[] = [];
+    zip.forEach((relativePath: string, zipEntry: { dir: boolean; async: (t: string) => Promise<Uint8Array> }) => {
+      if (zipEntry.dir) return;
+
+      // Убираем префикс верхней папки
+      const cleanPath = stripPrefix ? relativePath.replace(stripPrefix, "") : relativePath;
+      if (!cleanPath) return;
+
+      // Проверяем skip-директории
+      if (SKIP_DIRS.some(d => cleanPath.includes(d))) return;
+
+      // Проверяем расширение
+      const ext = cleanPath.slice(cleanPath.lastIndexOf(".")).toLowerCase();
+      if (SKIP_EXT.includes(ext)) return;
+
+      // Проверяем включение: корневые файлы или нужные директории
+      const isRootFile = INCLUDE_ROOT.includes(cleanPath);
+      const isInDir = INCLUDE_DIRS.some(d => cleanPath.startsWith(d));
+      if (!isRootFile && !isInDir) return;
+
+      filePromises.push(
+        zipEntry.async("uint8array").then((bytes: Uint8Array) => {
+          if (bytes.length > MAX_SIZE) return;
+          // Кодируем в base64 чанками
+          const chunks: string[] = [];
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            chunks.push(String.fromCharCode(...bytes.slice(i, i + chunkSize)));
+          }
+          filesToPush.push({ path: cleanPath, content_b64: btoa(chunks.join("")) });
+        })
+      );
+    });
+
+    await Promise.all(filePromises);
+
+    if (filesToPush.length === 0) {
+      throw new Error(`Не найдено файлов для выгрузки. Проверьте что в репозитории ${sourceRepo} есть папки src/, backend/`);
+    }
+
+    onProgress?.(`Найдено ${filesToPush.length} файлов. Выгружаю в ${targetRepo}...`);
+
+    // ── Шаг 3: отправляем файлы на бэкенд для записи в GitHub ───────────────
+    // Отправляем пачками по 20 файлов чтобы не перегружать запрос
+    const BATCH = 20;
+    let pushed = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < filesToPush.length; i += BATCH) {
+      const batch = filesToPush.slice(i, i + BATCH);
+      const batchNum = Math.floor(i / BATCH) + 1;
+      const totalBatches = Math.ceil(filesToPush.length / BATCH);
+      onProgress?.(`Выгружаю файлы: пакет ${batchNum}/${totalBatches} (${Math.min(i + BATCH, filesToPush.length)}/${filesToPush.length})...`);
+
+      const res = await fetch(GITHUB_DOWNLOAD_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "push", token, repo: targetRepo, branch, files: batch }),
+      });
+      const data = await res.json() as { ok?: boolean; pushed?: number; errors?: string[]; error?: string };
+      if (res.ok && data.ok !== false) {
+        pushed += data.pushed ?? batch.length;
+        if (data.errors) errors.push(...data.errors);
+      } else {
+        errors.push(`Пакет ${batchNum}: ${data.error || "неизвестная ошибка"}`);
+      }
+    }
+
+    const errNote = errors.length > 0
+      ? `\n\n⚠️ Пропущено: ${errors.length} файлов.\nПервые ошибки:\n${errors.slice(0, 3).join("\n")}`
       : "";
 
     return {
-      ok: true,
-      message: `${data.message || "Выгрузка завершена"}${errNote}\n\nРепозиторий: ${repo} (ветка ${branch})`,
+      ok: pushed > 0,
+      message: `✅ Выгружено ${pushed} из ${filesToPush.length} файлов в \`${targetRepo}\` (ветка \`${branch}\`)${errNote}`,
     };
   }, [ghSettings]);
 
