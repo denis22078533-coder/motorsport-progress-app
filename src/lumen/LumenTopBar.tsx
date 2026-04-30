@@ -15,7 +15,7 @@ interface Props {
 
 const STATUS_MAP = {
   idle:       { dot: "bg-zinc-500",                  text: "text-zinc-400" },
-  generating: { dot: "bg-[#9333ea] animate-pulse",   text: "text-[#9333ea]" },
+  generating: { dot: "bg-[#f59e0b] animate-pulse",   text: "text-[#f59e0b]" },
   done:       { dot: "bg-emerald-400",               text: "text-emerald-400" },
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
@@ -29,17 +29,17 @@ export default function LumenTopBar({ status, cycleLabel, selfEditActive, onSett
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
       className={`h-11 flex items-center justify-between px-3 border-b bg-[#07070c]/90 backdrop-blur-xl z-50 shrink-0 min-w-0 transition-colors ${
-        selfEditActive ? "border-amber-500/30" : "border-[#9333ea]/20"
+        selfEditActive ? "border-amber-500/30" : "border-[#f59e0b]/20"
       }`}
     >
       {/* Left — Logo + status */}
       <div className="flex items-center gap-2 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shadow-[0_0_8px_#9333ea80]">
-            <span className="text-white text-[10px] font-bold tracking-tight">L</span>
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center shadow-[0_0_8px_#f59e0b80] text-sm">
+            🐜
           </div>
-          <span className="text-white font-semibold text-sm tracking-tight">Lumen</span>
-          <span className="hidden lg:inline text-white/20 text-[10px] font-medium tracking-wider ml-1">— Система управления реальностью сайтов</span>
+          <span className="text-white font-semibold text-sm tracking-tight">Муравей</span>
+          <span className="hidden lg:inline text-white/20 text-[10px] font-medium tracking-wider ml-1">— AI-разработчик сайтов</span>
         </div>
 
         <div className="hidden sm:block w-px h-4 bg-white/10 shrink-0" />

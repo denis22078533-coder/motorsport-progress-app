@@ -79,9 +79,9 @@ export default function LumenLoginPage({ onLogin }: Props) {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.15, duration: 0.4, ease: "easeOut" }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#9333ea] to-[#7e22ce] flex items-center justify-center shadow-[0_0_50px_#9333ea60] mb-4"
+            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center shadow-[0_0_50px_#f59e0b60] mb-4"
           >
-            <span className="text-white text-2xl font-bold tracking-tight">L</span>
+            <span className="text-2xl">🐜</span>
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 8 }}
@@ -89,7 +89,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
             transition={{ delay: 0.22, duration: 0.35 }}
             className="text-white text-2xl font-semibold tracking-tight"
           >
-            Lumen
+            Муравей
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}
@@ -97,7 +97,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
             transition={{ delay: 0.3, duration: 0.35 }}
             className="text-white/30 text-sm mt-1 text-center"
           >
-            Система управления реальностью сайтов
+            AI-разработчик сайтов и приложений
           </motion.p>
         </div>
 
@@ -157,7 +157,7 @@ export default function LumenLoginPage({ onLogin }: Props) {
               disabled={!password.trim() || loading}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
-              className="h-11 rounded-xl bg-[#9333ea] hover:bg-[#7e22ce] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors mt-1 shadow-[0_0_20px_#9333ea40]"
+              className="h-11 rounded-xl bg-gradient-to-r from-[#f59e0b] to-[#ef4444] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all mt-1 shadow-[0_0_20px_#f59e0b40]"
             >
               {loading ? (
                 <>

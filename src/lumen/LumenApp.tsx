@@ -5,6 +5,9 @@ import LivePreview from "./LivePreview";
 import ChatPanel, { ChatMode } from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
 import LumenLoginPage from "./LumenLoginPage";
+import HomePage from "./HomePage";
+import BottomNav, { Tab } from "./BottomNav";
+import AntWorker from "./AntWorker";
 import { useLumenAuth } from "./useLumenAuth";
 import { useGitHub } from "./useGitHub";
 
@@ -143,30 +146,41 @@ Output ONLY valid JSON, no markdown fences.`;
 const SELF_EDIT_SYSTEM_PROMPT = (repo: string, branch: string) =>
   `${SENIOR_DEV_ROLE}
 ## Self-Edit Mode — ACTIVE
-You have READ and WRITE access to the Lumen platform source code via GitHub API.
+You have READ and WRITE access to the Муравей (Ant) platform source code via GitHub API.
 Engine Repository: ${repo} (branch: ${branch})
 
-To read a file: respond with a JSON action block:
+To list files in a directory:
+\`\`\`action
+{"action":"list","path":"src/lumen"}
+\`\`\`
+
+To read ONE file:
 \`\`\`action
 {"action":"read","path":"src/lumen/LumenApp.tsx"}
 \`\`\`
 
-To write/modify a file: respond with a JSON action block:
+To read MULTIPLE files at once:
+\`\`\`action
+{"action":"read_multiple","paths":["src/lumen/LumenApp.tsx","src/lumen/ChatPanel.tsx"]}
+\`\`\`
+
+To write/modify a file:
 \`\`\`action
 {"action":"write","path":"src/lumen/SomeFile.tsx","content":"...full file content..."}
 \`\`\`
 
-Workflow for editing platform files:
-1. First READ the target file to understand current code
-2. Plan minimal changes
-3. WRITE the complete updated file content
-4. Confirm what was changed and why
+Workflow:
+1. Use list to explore directories
+2. Use read_multiple to read several files at once (faster!)
+3. Plan minimal changes
+4. WRITE complete updated file content
+5. Confirm changes
 
 Rules:
 - Always read before writing
-- Write the COMPLETE file content, not just the changed parts
-- Preserve existing imports, exports, and component structure
-- Respond in Russian to the user, but keep code in English`;
+- Prefer read_multiple over multiple single reads
+- Write the COMPLETE file content, not just changed parts
+- Respond in Russian to the user, keep code in English`;
 
 
 
@@ -200,6 +214,9 @@ export default function LumenApp() {
   const [fullCodeContext, setFullCodeContext] = useState<{ html: string; fileName: string } | null>(null);
   const [showRebuildBanner, setShowRebuildBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Bottom navigation
+  const [activeTab, setActiveTab] = useState<Tab>("home");
 
   // Self-Edit Mode
   const [selfEditMode, setSelfEditMode] = useState<boolean>(() => {
@@ -730,6 +747,17 @@ ${PROJECT_STRUCTURE}`;
     }
   }, [settings, messages]);
 
+  // ── Утилита: список файлов в директории через GitHub API ──────────────────
+  const listDirFromGitHub = async (dirPath: string, token: string, repo: string, branch: string): Promise<string | null> => {
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${dirPath}?ref=${branch}`;
+    const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+    if (!res.ok) return null;
+    const data = await res.json() as { name: string; type: string; size: number }[];
+    if (!Array.isArray(data)) return null;
+    const lines = data.map(f => `${f.type === "dir" ? "📁" : "📄"} ${dirPath}/${f.name}${f.type === "file" ? ` (${f.size} байт)` : ""}`);
+    return lines.join("\n");
+  };
+
   // ── Self-Edit Mode — ИИ читает/пишет файлы платформы через GitHub API ────────
   const handleSelfEditChat = useCallback(async (text: string) => {
     if (!settings.apiKey) { setSettingsOpen(true); return; }
@@ -746,20 +774,56 @@ ${PROJECT_STRUCTURE}`;
       // Парсим action-блоки из ответа ИИ
       const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
       if (actionMatch && engineToken) {
-        let actionData: { action: string; path?: string; content?: string };
+        let actionData: { action: string; path?: string; paths?: string[]; content?: string };
         try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
+
+        // action: list — список файлов в директории
+        if (actionData.action === "list" && actionData.path) {
+          setCycleLabel("Self-Edit: читаю директорию...");
+          const listing = await listDirFromGitHub(actionData.path, engineToken, engineRepo, engineBranch);
+          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+          if (listing) {
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nСодержимое \`${actionData.path}\`:\n\`\`\`\n${listing}\n\`\`\``.trim() }]);
+            const response2 = await callAI(systemPrompt, `Содержимое директории ${actionData.path}:\n${listing}\n\nТеперь выполни запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
+            setCycleStatus("done"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          } else {
+            setCycleStatus("error"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать директорию \`${actionData.path}\`.`.trim() }]);
+          }
+          return;
+        }
+
+        // action: read_multiple — читаем несколько файлов за раз
+        if (actionData.action === "read_multiple" && actionData.paths && actionData.paths.length > 0) {
+          setCycleLabel("Self-Edit: читаю файлы...");
+          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+          const filesContent: string[] = [];
+          for (let i = 0; i < actionData.paths.length; i++) {
+            const p = actionData.paths[i];
+            setCycleLabel(`Self-Edit: читаю ${i + 1}/${actionData.paths.length}...`);
+            const content = await readFileFromGitHub(p, engineToken, engineRepo, engineBranch);
+            if (content !== null) {
+              const sizeStr = content.length < 1024 ? `${content.length} байт` : `${(content.length / 1024).toFixed(1)} КБ`;
+              filesContent.push(`### ${p} (${sizeStr})\n\`\`\`\n${content}\n\`\`\``);
+            } else {
+              filesContent.push(`### ${p}\n[файл не найден]`);
+            }
+          }
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов). Анализирую...`.trim() }]);
+          const response2 = await callAI(systemPrompt, `Содержимое файлов:\n\n${filesContent.join("\n\n")}\n\nТеперь выполни запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), false);
+          setCycleStatus("done"); setCycleLabel("");
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          return;
+        }
 
         if (actionData.action === "read" && actionData.path) {
           setCycleLabel("Self-Edit: читаю файл...");
-          const apiUrl = `https://api.github.com/repos/${engineRepo}/contents/${actionData.path}?ref=${engineBranch}`;
-          const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json" } });
-          if (res.ok) {
-            const data = await res.json() as { content: string; sha: string };
-            const fileContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+          const fileContent = await readFileFromGitHub(actionData.path, engineToken, engineRepo, engineBranch);
+          if (fileContent !== null) {
             const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
             const sizeStr = fileContent.length < 1024 ? `${fileContent.length} байт` : `${(fileContent.length / 1024).toFixed(1)} КБ`;
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${sizeStr}). Продолжаю...`.trim() }]);
-            // Второй вызов ИИ с контентом файла
             const response2 = await callAI(systemPrompt, `Файл ${actionData.path}:\n\`\`\`\n${fileContent}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
@@ -1101,6 +1165,8 @@ ${urlList}
   const topStatus: "idle" | "generating" | "done" | "error" =
     cycleStatus === "reading" ? "generating" : cycleStatus;
 
+  const isGenerating = cycleStatus === "generating" || cycleStatus === "reading";
+
   return (
     <AnimatePresence mode="wait">
       {!authed ? (
@@ -1117,13 +1183,16 @@ ${urlList}
           className="h-dvh flex flex-col bg-[#07070c] overflow-hidden"
           style={{ maxWidth: "100vw" }}
         >
-          <LumenTopBar
-            status={topStatus}
-            cycleLabel={cycleLabel}
-            selfEditActive={selfEditMode}
-            onSettings={() => setSettingsOpen(true)}
-            onLogout={logout}
-          />
+          {/* Show TopBar only on chat/preview tabs (desktop-like) */}
+          {(activeTab === "chat" || activeTab === "projects") && (
+            <LumenTopBar
+              status={topStatus}
+              cycleLabel={cycleLabel}
+              selfEditActive={selfEditMode}
+              onSettings={() => setSettingsOpen(true)}
+              onLogout={logout}
+            />
+          )}
 
           {/* Hidden file input */}
           <input
@@ -1143,97 +1212,183 @@ ${urlList}
             onChange={handleLoadZip}
           />
 
-          {/* Rebuild notification banner */}
-          {showRebuildBanner && (
-            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-amber-950/60 border-b border-amber-500/30 text-xs">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span className="text-amber-300 font-medium">Внесены правки в код — нажмите «Опубликовать» или сделайте пересборку проекта</span>
-              <button
-                onClick={() => setShowRebuildBanner(false)}
-                className="ml-auto text-amber-400/50 hover:text-amber-400 transition-colors text-[10px] px-2 py-0.5 rounded border border-amber-500/20 hover:border-amber-500/40"
-              >
-                ✕
-              </button>
-            </div>
-          )}
+          {/* Main content area — switches between tabs */}
+          <div className="flex-1 min-h-0 overflow-hidden relative">
+            <AnimatePresence mode="wait">
 
-          {/* Local file context banner */}
-          {fullCodeContext && (
-            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-cyan-500/20 text-xs">
-              <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-              <span className="text-white/40">Локальный файл:</span>
-              <span className="text-cyan-400 font-mono font-medium">{fullCodeContext.fileName}</span>
-              <button
-                onClick={() => setFullCodeContext(null)}
-                className="ml-auto text-white/20 hover:text-white/60 transition-colors text-[10px] px-2 py-0.5 rounded border border-white/10 hover:border-white/20"
-              >
-                ✕ сбросить
-              </button>
-            </div>
-          )}
+              {/* HOME TAB */}
+              {activeTab === "home" && (
+                <motion.div
+                  key="home"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="absolute inset-0"
+                >
+                  <HomePage
+                    onGoToChat={() => setActiveTab("chat")}
+                    onGoToProjects={() => setActiveTab("projects")}
+                    onGoToProfile={() => setActiveTab("profile")}
+                  />
+                </motion.div>
+              )}
 
-          {/* GitHub file context banner */}
-          {!fullCodeContext && currentFilePath && (
-            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-[#9333ea]/20 text-xs">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-white/40">Редактируется:</span>
-              <span className="text-emerald-400 font-mono font-medium">{currentFilePath}</span>
-              <span className="text-white/20 ml-auto font-mono">{ghSettings.repo}</span>
-            </div>
-          )}
+              {/* CHAT TAB */}
+              {activeTab === "chat" && (
+                <motion.div
+                  key="chat"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="absolute inset-0 flex flex-col"
+                >
+                  {/* Rebuild notification banner */}
+                  {showRebuildBanner && (
+                    <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-amber-950/60 border-b border-amber-500/30 text-xs">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="text-amber-300 font-medium">Внесены правки в код — нажмите «Опубликовать»</span>
+                      <button onClick={() => setShowRebuildBanner(false)} className="ml-auto text-amber-400/50 hover:text-amber-400 transition-colors text-[10px] px-2 py-0.5 rounded border border-amber-500/20">✕</button>
+                    </div>
+                  )}
+                  {fullCodeContext && (
+                    <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-cyan-500/20 text-xs">
+                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-white/40">Локальный файл:</span>
+                      <span className="text-cyan-400 font-mono font-medium">{fullCodeContext.fileName}</span>
+                      <button onClick={() => setFullCodeContext(null)} className="ml-auto text-white/20 hover:text-white/60 transition-colors text-[10px] px-2 py-0.5 rounded border border-white/10">✕</button>
+                    </div>
+                  )}
+                  {!fullCodeContext && currentFilePath && (
+                    <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-[#0d0d18] border-b border-[#9333ea]/20 text-xs">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-white/40">Редактируется:</span>
+                      <span className="text-emerald-400 font-mono font-medium">{currentFilePath}</span>
+                      <span className="text-white/20 ml-auto font-mono">{ghSettings.repo}</span>
+                    </div>
+                  )}
 
-          {/* Mobile tab switcher */}
-          <div className="md:hidden flex shrink-0 border-b border-white/[0.06] bg-[#0a0a0f]">
-            {(["chat", "preview"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setMobileTab(tab)}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                  mobileTab === tab
-                    ? "text-[#9333ea] border-b-2 border-[#9333ea]"
-                    : "text-white/40 border-b-2 border-transparent"
-                }`}
-              >
-                {tab === "chat" ? <><span>💬</span> Чат</> : <><span>🖥️</span> Сайт</>}
-              </button>
-            ))}
+                  {/* Mobile tab switcher chat/preview */}
+                  <div className="md:hidden flex shrink-0 border-b border-white/[0.06] bg-[#0a0a0f]">
+                    {(["chat", "preview"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setMobileTab(tab)}
+                        className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                          mobileTab === tab ? "text-[#f59e0b] border-b-2 border-[#f59e0b]" : "text-white/40 border-b-2 border-transparent"
+                        }`}
+                      >
+                        {tab === "chat" ? <><span>💬</span> Чат</> : <><span>🖥️</span> Сайт</>}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-hidden relative md:flex md:gap-2 md:p-2">
+                    <div className={`flex flex-col h-full md:w-[420px] md:flex-none bg-[#0a0a0f] md:static ${mobileTab === "chat" ? "absolute inset-0 z-10 flex" : "hidden md:flex"}`}>
+                      <ChatPanel
+                        status={cycleStatus}
+                        cycleLabel={cycleLabel}
+                        messages={messages}
+                        onSend={handleSend}
+                        onStop={handleStop}
+                        onApply={handleApply}
+                        deployingId={deployingId}
+                        deployResult={deployResult}
+                        liveUrl={liveUrl}
+                        onOpenPreview={() => setMobileTab("preview")}
+                        onLoadFromGitHub={handleLoadFromGitHub}
+                        loadingFromGitHub={loadingFromGitHub}
+                        currentFilePath={ghSettings.filePath || "index.html"}
+                        onLoadLocalFile={() => fileInputRef.current?.click()}
+                        hasLocalFile={!!fullCodeContext}
+                        localFileName={fullCodeContext?.fileName}
+                        pendingSql={pendingSql}
+                      />
+                    </div>
+                    <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
+                      <LivePreview
+                        status={topStatus}
+                        previewHtml={previewHtml}
+                        liveUrl={liveUrl}
+                        onApplyToGitHub={ghSettings.token && ghSettings.repo ? handleApplyToGitHub : undefined}
+                        onUndo={htmlHistory.length > 0 ? handleUndo : undefined}
+                        canUndo={htmlHistory.length > 0}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Ant worker animation */}
+                  <AntWorker active={isGenerating} label={cycleLabel} />
+                </motion.div>
+              )}
+
+              {/* PROJECTS TAB */}
+              {activeTab === "projects" && (
+                <motion.div
+                  key="projects"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6"
+                >
+                  <span className="text-5xl">📁</span>
+                  <h2 className="text-white font-bold text-xl">Мои проекты</h2>
+                  <p className="text-white/40 text-sm text-center">Здесь будут ваши сохранённые сайты и приложения</p>
+                  <button
+                    onClick={() => setActiveTab("chat")}
+                    className="mt-2 h-11 px-6 rounded-xl bg-gradient-to-r from-[#f59e0b] to-[#ef4444] text-white font-semibold text-sm"
+                  >
+                    🐜 Создать первый проект
+                  </button>
+                </motion.div>
+              )}
+
+              {/* PROFILE TAB */}
+              {activeTab === "profile" && (
+                <motion.div
+                  key="profile"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="absolute inset-0 flex flex-col overflow-y-auto pb-4"
+                >
+                  <div className="px-4 py-6 flex flex-col items-center gap-3 border-b border-white/[0.06]">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-4xl shadow-[0_0_30px_#f59e0b40]">
+                      🐜
+                    </div>
+                    <div className="text-center">
+                      <h2 className="text-white font-bold text-lg">Профиль</h2>
+                      <p className="text-white/40 text-xs">Муравей AI-разработчик</p>
+                    </div>
+                  </div>
+                  <div className="px-4 py-4 flex flex-col gap-2">
+                    <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-3 px-4 py-3.5 bg-white/[0.04] border border-white/[0.07] rounded-xl text-left hover:bg-white/[0.07] transition-all">
+                      <span className="text-xl">⚙️</span>
+                      <div>
+                        <div className="text-white/80 text-sm font-medium">Настройки</div>
+                        <div className="text-white/30 text-xs">API ключи, GitHub, модель</div>
+                      </div>
+                      <span className="text-white/20 ml-auto">→</span>
+                    </button>
+                    <button onClick={logout} className="flex items-center gap-3 px-4 py-3.5 bg-red-500/[0.05] border border-red-500/20 rounded-xl text-left hover:bg-red-500/[0.10] transition-all">
+                      <span className="text-xl">🚪</span>
+                      <div>
+                        <div className="text-red-400 text-sm font-medium">Выйти</div>
+                        <div className="text-white/30 text-xs">Завершить сессию</div>
+                      </div>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+            </AnimatePresence>
           </div>
 
-          {/* Main content */}
-          <div className="flex-1 min-h-0 overflow-hidden relative md:flex md:gap-2 md:p-2">
-            <div className={`flex flex-col h-full md:w-[420px] md:flex-none bg-[#0a0a0f] md:static ${mobileTab === "chat" ? "absolute inset-0 z-10 flex" : "hidden md:flex"}`}>
-              <ChatPanel
-                status={cycleStatus}
-                cycleLabel={cycleLabel}
-                messages={messages}
-                onSend={handleSend}
-                onStop={handleStop}
-                onApply={handleApply}
-                deployingId={deployingId}
-                deployResult={deployResult}
-                liveUrl={liveUrl}
-                onOpenPreview={() => setMobileTab("preview")}
-                onLoadFromGitHub={handleLoadFromGitHub}
-                loadingFromGitHub={loadingFromGitHub}
-                currentFilePath={ghSettings.filePath || "index.html"}
-                onLoadLocalFile={() => fileInputRef.current?.click()}
-                hasLocalFile={!!fullCodeContext}
-                localFileName={fullCodeContext?.fileName}
-                pendingSql={pendingSql}
-              />
-            </div>
-
-            <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
-              <LivePreview
-                status={topStatus}
-                previewHtml={previewHtml}
-                liveUrl={liveUrl}
-                onApplyToGitHub={ghSettings.token && ghSettings.repo ? handleApplyToGitHub : undefined}
-                onUndo={htmlHistory.length > 0 ? handleUndo : undefined}
-                canUndo={htmlHistory.length > 0}
-              />
-            </div>
-          </div>
+          {/* Bottom Navigation */}
+          <BottomNav active={activeTab} onChange={setActiveTab} />
 
           <SettingsDrawer
             open={settingsOpen}
