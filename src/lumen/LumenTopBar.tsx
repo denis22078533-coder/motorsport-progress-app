@@ -8,6 +8,7 @@ interface Props {
   onExport: () => void;
   onExportSource?: () => void;
   exportingSource?: boolean;
+  selfEditActive?: boolean;
   onSettings: () => void;
   onLogout: () => void;
 }
@@ -19,7 +20,7 @@ const STATUS_MAP = {
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onExportSource, exportingSource, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport, onExportSource, exportingSource, selfEditActive, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -27,7 +28,9 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="h-11 flex items-center justify-between px-3 border-b border-[#9333ea]/20 bg-[#07070c]/90 backdrop-blur-xl z-50 shrink-0 min-w-0"
+      className={`h-11 flex items-center justify-between px-3 border-b bg-[#07070c]/90 backdrop-blur-xl z-50 shrink-0 min-w-0 transition-colors ${
+        selfEditActive ? "border-amber-500/30" : "border-[#9333ea]/20"
+      }`}
     >
       {/* Left — Logo + status */}
       <div className="flex items-center gap-2 min-w-0 overflow-hidden">
@@ -52,16 +55,22 @@ export default function LumenTopBar({ status, cycleLabel, onNewProject, onExport
 
       {/* Right — Actions */}
       <div className="flex items-center gap-1.5 shrink-0">
+        {selfEditActive && (
+          <div className="hidden sm:flex items-center gap-1.5 h-6 px-2.5 rounded-md bg-amber-500/10 border border-amber-500/25">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-amber-400 text-[10px] font-semibold">Self-Edit</span>
+          </div>
+        )}
         {onExportSource && (
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={onExportSource}
             disabled={exportingSource}
-            title="Скачать исходный код проекта (ZIP)"
+            title="Sync Engine — скачать исходники платформы (ZIP)"
             className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-emerald-500/30 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12] text-emerald-400/70 hover:text-emerald-400 text-xs font-medium transition-colors disabled:opacity-40"
           >
-            <Icon name={exportingSource ? "Loader" : "FolderDown"} size={12} className={exportingSource ? "animate-spin" : ""} />
-            <span className="hidden lg:inline">Исходники</span>
+            <Icon name={exportingSource ? "Loader" : "GitBranch"} size={12} className={exportingSource ? "animate-spin" : ""} />
+            <span className="hidden lg:inline">Sync Engine</span>
           </motion.button>
         )}
 

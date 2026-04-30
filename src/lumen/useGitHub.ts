@@ -7,6 +7,10 @@ export interface GitHubSettings {
   repo: string;
   filePath: string;
   siteUrl: string;
+  // Engine Git — второй репозиторий для исходников платформы
+  engineToken: string;
+  engineRepo: string;
+  engineBranch: string;
 }
 
 const DEFAULT: GitHubSettings = {
@@ -14,6 +18,9 @@ const DEFAULT: GitHubSettings = {
   repo: "denis22078533-coder/Lumin-platform",
   filePath: "index.html",
   siteUrl: "",
+  engineToken: "",
+  engineRepo: "",
+  engineBranch: "main",
 };
 
 function load(): GitHubSettings {
@@ -30,6 +37,8 @@ export interface FetchResult {
   filePath: string;
   message?: string;
 }
+
+const GITHUB_DOWNLOAD_URL = "https://functions.poehali.dev/b9736970-2710-4830-9cbf-3b2f015371be";
 
 export function useGitHub() {
   const [ghSettings, setGhSettings] = useState<GitHubSettings>(load);
@@ -73,7 +82,6 @@ export function useGitHub() {
     const path = (filePath || "index.html").trim().replace(/^\//, "");
     const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
 
-    // Всегда получаем свежий SHA из ветки main перед записью
     let actualSha = sha;
     try {
       const getRes = await fetch(`${apiUrl}?ref=main`, {
@@ -83,9 +91,7 @@ export function useGitHub() {
         const data = await getRes.json() as { sha: string };
         actualSha = data.sha;
       }
-    } catch (_e) {
-      // файл новый — sha не нужен
-    }
+    } catch (_e) { /* файл новый */ }
 
     const content = btoa(unescape(encodeURIComponent(html)));
 
@@ -109,15 +115,11 @@ export function useGitHub() {
       return { status: r.status, ok: r.ok, data: d };
     };
 
-    console.log("[Lumen→GitHub] PUT", apiUrl, { sha: actualSha, branch: "main", contentLength: content.length });
     let result = await doPut(actualSha);
-    console.log("[Lumen→GitHub] Response", result.status, result.data);
 
-    // Если SHA не совпал — перезапрашиваем актуальный и повторяем (до 3 попыток)
     let attempts = 0;
     while (!result.ok && attempts < 3 && /sha|match|conflict/i.test(result.data.message || "")) {
       attempts++;
-      console.log(`[Lumen→GitHub] SHA mismatch, retry #${attempts}`);
       try {
         const refresh = await fetch(`${apiUrl}?ref=main&_=${Date.now()}`, {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Cache-Control": "no-cache" },
@@ -126,13 +128,8 @@ export function useGitHub() {
           const fresh = await refresh.json() as { sha: string };
           actualSha = fresh.sha;
           result = await doPut(actualSha);
-          console.log("[Lumen→GitHub] Retry response", result.status, result.data);
-        } else {
-          break;
-        }
-      } catch (_e) {
-        break;
-      }
+        } else break;
+      } catch (_e) { break; }
     }
 
     if (result.ok) {
@@ -142,5 +139,46 @@ export function useGitHub() {
     }
   }, [ghSettings]);
 
-  return { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub };
+  // ── Engine Sync — загружает весь репозиторий платформы через backend ────────
+  const syncEngine = useCallback(async (
+    onProgress?: (msg: string) => void
+  ): Promise<{ ok: boolean; message: string }> => {
+    const token = ghSettings.engineToken || ghSettings.token;
+    const repo = ghSettings.engineRepo;
+    const branch = ghSettings.engineBranch || "main";
+
+    if (!token) return { ok: false, message: "Укажите Engine GitHub Token в настройках" };
+    if (!repo) return { ok: false, message: "Укажите Engine Repository (например: user/moi-lumin)" };
+
+    onProgress?.("Скачиваю архив платформы...");
+
+    const res = await fetch(GITHUB_DOWNLOAD_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, repo, branch }),
+    });
+    const data = await res.json() as { zip_b64?: string; size?: number; error?: string };
+    if (!res.ok || !data.zip_b64) throw new Error(data.error || `HTTP ${res.status}`);
+
+    onProgress?.("Распаковываю архив...");
+
+    const binary = atob(data.zip_b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const repoName = repo.split("/")[1] || "engine-source";
+    a.href = url;
+    a.download = `${repoName}-engine.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    return {
+      ok: true,
+      message: `Архив платформы скачан: ${repoName}-engine.zip (${Math.round((data.size || 0) / 1024)} КБ)\n/src, /backend и все конфиги внутри. Для запуска: npm install → npm run build.`,
+    };
+  }, [ghSettings]);
+
+  return { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub, syncEngine };
 }

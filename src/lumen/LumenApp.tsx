@@ -45,23 +45,43 @@ const PROJECT_STRUCTURE = `
 /backend/                    — Python 3.11 Cloud Functions (deployed serverless)
   /backend/lumen-proxy/      — OpenAI/Claude API proxy with streaming support
   /backend/generate-image/   — image generation via Pollinations + S3 CDN
+  /backend/github-download/  — GitHub repo ZIP download proxy (Engine Sync)
   /backend/auth/             — authentication service
 /db_migrations/              — PostgreSQL migrations (Flyway format: V{n}__{name}.sql)
 /public/                     — static assets
 package.json, vite.config.ts, tailwind.config.ts — project config
 `;
 
-// ── Базовая роль AI — Senior Fullstack Developer ────────────────────────────
-const SENIOR_DEV_ROLE = `You are a Senior Fullstack Developer with 10+ years of experience in web development.
-Your expertise: HTML/CSS/JS, React, TypeScript, Python, PostgreSQL, REST APIs, clean architecture.
-Rules you always follow:
-- Write production-quality, clean, maintainable code
-- No placeholder comments like "// add your code here" — always write real implementation
-- Semantic HTML, accessible markup, mobile-first responsive design
-- Optimize for performance: minimal DOM, efficient CSS, no layout thrashing
-- When editing existing code — preserve the architecture, only change what's asked
+// ── Senior Developer Base Role ──────────────────────────────────────────────
+const SENIOR_DEV_ROLE = `You are a Senior Fullstack Developer with 10+ years of experience.
+Core stack: HTML/CSS/JS, React, TypeScript, Python 3.11, PostgreSQL/MySQL, REST APIs, clean architecture.
+
+## Standards you ALWAYS follow:
+- Write production-quality, clean, maintainable code — no stubs, no placeholders
+- Semantic HTML, accessible markup (aria-labels), mobile-first responsive design
+- Before writing code for complex systems — output a brief architecture plan (DB schema + frontend structure)
+- Optimize performance: minimal DOM, efficient CSS, no layout thrashing
+- When editing — preserve existing architecture, change ONLY what was asked
 - Output ONLY the requested artifact — no explanations, no markdown wrappers unless it IS markdown
 - Respond in the same language the user writes in (Russian if user writes in Russian)
+
+## Built-in integrations knowledge:
+- **ЮKassa**: REST API (https://yookassa.ru/developers), payment_id flow, webhooks, idempotence_key
+- **Robokassa**: MD5 signature, ResultURL/SuccessURL callbacks, receipt format
+- **СДЭК API v2**: OAuth2 token, /orders POST, tariff codes (136=door2door, 137=door2pickup), /calculator/tarifflist
+- **Telegram Bot API**: sendMessage, inline keyboards, webhook vs polling, parse_mode=HTML
+- **MySQL**: CREATE TABLE, ALTER TABLE, INDEX — always use utf8mb4, ENGINE=InnoDB; TINYINT(1) for bool
+- **PostgreSQL**: standard DDL, serial/bigserial, IF NOT EXISTS, full-text search
+
+## Architecture thinking:
+When user asks for a complex feature — FIRST output a short plan:
+\`\`\`
+[Архитектура]
+БД: таблицы + ключевые поля
+Фронт: компоненты + flow
+API: эндпоинты
+\`\`\`
+Then implement.
 ${PROJECT_STRUCTURE}`;
 
 const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
@@ -74,7 +94,8 @@ Technical requirements:
 - Default to light theme (white/light-gray background, dark text) unless explicitly asked for dark
 - All JS inline in <script> tags, no external files
 - Fully responsive, works on mobile and desktop
-- IMAGES: If ready image URLs are provided in the request — use them in <img src="..."> tags. No placeholder images if real URLs exist.`;
+- IMAGES: If ready image URLs are provided — use them directly. No placeholder images if real URLs exist.
+- For forms/payments — add skeleton structure with comments showing WHERE to integrate (ЮKassa/Robokassa/СДЭК)`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
@@ -82,9 +103,8 @@ const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
 Output ONLY the complete modified HTML document. No explanations, no markdown.
 Rules:
 - Make EXACTLY the requested changes, nothing more
-- Preserve all existing styles, structure, content that was NOT mentioned in the request
+- Preserve all existing styles, structure, content that was NOT mentioned
 - Keep the same framework/library versions already in the code
-- Default to light theme unless user explicitly requests dark
 
 --- CURRENT SITE CODE ---
 ${currentHtml}
@@ -92,15 +112,13 @@ ${currentHtml}
 
 const ZIP_CONVERT_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
 ## Task: Convert React/Vite project to single HTML file
-Your ONLY goal is to faithfully recreate the existing site from the provided source files as one self-contained HTML file.
+Your ONLY goal is to faithfully recreate the existing site as one self-contained HTML file.
 Strict rules:
 1. Output ONLY the complete HTML document (<!DOCTYPE html>...) — no explanations, no markdown
-2. DO NOT invent new design, colors, or copy — reproduce EXACTLY what's in the source files
-3. Preserve all text, headings, descriptions from the original
-4. Preserve color scheme, fonts, spacing from the original
-5. Load via CDN: Tailwind CSS, Lucide icons, Google Fonts (if used in source)
-6. All JS inline in <script> tags
-7. Fully responsive`;
+2. DO NOT invent new design or copy — reproduce EXACTLY what's in the source files
+3. Preserve all text, headings, color scheme, fonts, spacing from the original
+4. Load via CDN: Tailwind CSS, Lucide icons, Google Fonts (if used in source)
+5. All JS inline in <script> tags. Fully responsive.`;
 
 const LOCAL_FILE_EDIT_PROMPT = (currentHtml: string, fileName: string) =>
   `${SENIOR_DEV_ROLE}
@@ -112,19 +130,43 @@ Make EXACTLY the requested changes — preserve everything else as-is.
 ${currentHtml}
 --- END OF CODE ---`;
 
-// ── Промпт для генерации SQL-миграций ──────────────────────────────────────
+// ── SQL migration prompt ────────────────────────────────────────────────────
 const SQL_MIGRATION_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
 ## Task: Generate SQL migration
-The user wants to change the database schema. Generate a proper SQL migration.
-Rules:
-1. Output a JSON object with two fields:
-   - "sql": the complete SQL migration script (PostgreSQL syntax, also compatible with MySQL where possible)
-   - "explanation": brief description of what this migration does (in Russian, 1-3 sentences)
-2. Migration format: standard DDL (CREATE TABLE, ALTER TABLE, ADD COLUMN, CREATE INDEX, etc.)
-3. Use IF NOT EXISTS where applicable to make migrations idempotent
-4. Add comments in SQL for clarity
-5. MySQL compatibility notes: avoid PostgreSQL-specific types (use VARCHAR instead of TEXT where possible, use TINYINT(1) for boolean)
+Output a JSON object with two fields:
+- "sql": complete SQL script (PostgreSQL + MySQL compatible where possible)
+- "explanation": brief description in Russian (1-3 sentences)
+Rules: USE IF NOT EXISTS, add comments, use VARCHAR over TEXT for MySQL compat, TINYINT(1) for bool.
 Output ONLY valid JSON, no markdown fences.`;
+
+// ── Self-Edit Mode промпт — ИИ редактирует платформу через GitHub ──────────
+const SELF_EDIT_SYSTEM_PROMPT = (repo: string, branch: string) =>
+  `${SENIOR_DEV_ROLE}
+## Self-Edit Mode — ACTIVE
+You have READ and WRITE access to the Lumen platform source code via GitHub API.
+Engine Repository: ${repo} (branch: ${branch})
+
+To read a file: respond with a JSON action block:
+\`\`\`action
+{"action":"read","path":"src/lumen/LumenApp.tsx"}
+\`\`\`
+
+To write/modify a file: respond with a JSON action block:
+\`\`\`action
+{"action":"write","path":"src/lumen/SomeFile.tsx","content":"...full file content..."}
+\`\`\`
+
+Workflow for editing platform files:
+1. First READ the target file to understand current code
+2. Plan minimal changes
+3. WRITE the complete updated file content
+4. Confirm what was changed and why
+
+Rules:
+- Always read before writing
+- Write the COMPLETE file content, not just the changed parts
+- Preserve existing imports, exports, and component structure
+- Respond in Russian to the user, but keep code in English`;
 
 
 
@@ -132,7 +174,7 @@ let msgCounter = 0;
 
 export default function LumenApp() {
   const { authed, login, logout } = useLumenAuth();
-  const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub } = useGitHub();
+  const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub, syncEngine } = useGitHub();
 
   const liveUrl = (() => {
     if (ghSettings.siteUrl?.trim()) {
@@ -158,6 +200,41 @@ export default function LumenApp() {
   const [fullCodeContext, setFullCodeContext] = useState<{ html: string; fileName: string } | null>(null);
   const [showRebuildBanner, setShowRebuildBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Self-Edit Mode
+  const [selfEditMode, setSelfEditMode] = useState<boolean>(() => {
+    try { return localStorage.getItem("lumen_self_edit") === "1"; } catch { return false; }
+  });
+  const handleSelfEditToggle = (v: boolean) => {
+    setSelfEditMode(v);
+    try { localStorage.setItem("lumen_self_edit", v ? "1" : "0"); } catch { /* ignore */ }
+    setMessages(prev => [...prev, {
+      id: ++msgCounter, role: "assistant",
+      text: v
+        ? "Self-Edit Mode включён. Теперь я могу читать и редактировать файлы платформы через Engine GitHub. Скажи что нужно изменить."
+        : "Self-Edit Mode выключен. Работаю в обычном режиме.",
+    }]);
+  };
+
+  // Sync Engine — скачать исходники платформы
+  const [syncingEngine, setSyncingEngine] = useState(false);
+  const handleSyncEngine = useCallback(async () => {
+    setSyncingEngine(true);
+    setCycleStatus("reading");
+    setCycleLabel("Синхронизирую Engine...");
+    try {
+      const result = await syncEngine((msg) => setCycleLabel(msg));
+      setCycleStatus(result.ok ? "done" : "error");
+      setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: result.message }]);
+    } catch (err) {
+      setCycleStatus("error");
+      setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка Sync Engine: ${err instanceof Error ? err.message : String(err)}` }]);
+    } finally {
+      setSyncingEngine(false);
+    }
+  }, [syncEngine]);
 
   // Сохраняем HTML в localStorage при каждом изменении
   const savePreviewHtml = (html: string | null) => {
@@ -607,6 +684,70 @@ ${PROJECT_STRUCTURE}`;
     }
   }, [settings, messages]);
 
+  // ── Self-Edit Mode — ИИ читает/пишет файлы платформы через GitHub API ────────
+  const handleSelfEditChat = useCallback(async (text: string) => {
+    if (!settings.apiKey) { setSettingsOpen(true); return; }
+    const engineToken = ghSettings.engineToken || ghSettings.token;
+    const engineRepo = ghSettings.engineRepo;
+    const engineBranch = ghSettings.engineBranch || "main";
+
+    setCycleStatus("generating");
+    setCycleLabel("Self-Edit: думаю...");
+    try {
+      const systemPrompt = SELF_EDIT_SYSTEM_PROMPT(engineRepo, engineBranch);
+      const response = await callAI(systemPrompt, text, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
+
+      // Парсим action-блоки из ответа ИИ
+      const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
+      if (actionMatch && engineToken) {
+        let actionData: { action: string; path?: string; content?: string };
+        try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
+
+        if (actionData.action === "read" && actionData.path) {
+          setCycleLabel("Self-Edit: читаю файл...");
+          const apiUrl = `https://api.github.com/repos/${engineRepo}/contents/${actionData.path}?ref=${engineBranch}`;
+          const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json" } });
+          if (res.ok) {
+            const data = await res.json() as { content: string; sha: string };
+            const fileContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+            const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал файл \`${actionData.path}\` (${Math.round(fileContent.length / 1024)} КБ). Продолжаю...` }]);
+            // Второй вызов ИИ с контентом файла
+            const response2 = await callAI(systemPrompt, `Файл ${actionData.path}:\n\`\`\`\n${fileContent}\n\`\`\`\n\nТеперь выполни оригинальный запрос: ${text}`, (chars) => setCycleLabel(`Self-Edit: ${chars} симв.`), true);
+            setCycleStatus("done"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+            return;
+          }
+        }
+
+        if (actionData.action === "write" && actionData.path && actionData.content) {
+          setCycleLabel("Self-Edit: сохраняю файл...");
+          const apiUrl = `https://api.github.com/repos/${engineRepo}/contents/${actionData.path}`;
+          // Получаем текущий SHA
+          let sha = "";
+          try {
+            const getRes = await fetch(`${apiUrl}?ref=${engineBranch}`, { headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json" } });
+            if (getRes.ok) { const d = await getRes.json() as { sha: string }; sha = d.sha; }
+          } catch { /* новый файл */ }
+          const content = btoa(unescape(encodeURIComponent(actionData.content)));
+          const reqBody: Record<string, string> = { message: `Lumen Self-Edit: обновил ${actionData.path}`, content, branch: engineBranch };
+          if (sha) reqBody.sha = sha;
+          const putRes = await fetch(apiUrl, { method: "PUT", headers: { Authorization: `Bearer ${engineToken}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
+          const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+          setCycleStatus(putRes.ok ? "done" : "error"); setCycleLabel("");
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: putRes.ok ? `${cleanResponse}\n\nФайл \`${actionData.path}\` успешно обновлён в ${engineRepo}.` : `${cleanResponse}\n\nОшибка сохранения файла: HTTP ${putRes.status}` }]);
+          return;
+        }
+      }
+
+      setCycleStatus("done"); setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response }]);
+    } catch (err) {
+      setCycleStatus("error"); setCycleLabel("");
+      setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка Self-Edit: ${err instanceof Error ? err.message : String(err)}` }]);
+    }
+  }, [settings, ghSettings, messages, selfEditMode]);
+
   const handleSend = useCallback(async (text: string, mode: ChatMode = "site") => {
     abortRef.current = false;
     const userMsg: Message = { id: ++msgCounter, role: "user", text };
@@ -615,6 +756,11 @@ ${PROJECT_STRUCTURE}`;
     setPendingSql(null);
 
     if (mode === "chat") {
+      // Self-Edit Mode — ИИ редактирует платформу через GitHub
+      if (selfEditMode && ghSettings.engineRepo) {
+        await handleSelfEditChat(text);
+        return;
+      }
       // Если запрос про БД/SQL — генерируем миграцию
       const isSqlRequest = /создай таблиц|добавь колонк|измени схему|миграци|sql|create table|alter table|добавь поле|удали колонк|индекс|foreign key|база данных.*изменить|изменить.*базу/i.test(text);
       if (isSqlRequest) {
@@ -881,61 +1027,7 @@ ${urlList}
     URL.revokeObjectURL(url);
   };
 
-  // ── Экспорт исходного кода через backend (обход CORS) ────────────────────
-  const [exportingSource, setExportingSource] = useState(false);
-  const GITHUB_DOWNLOAD_URL = "https://functions.poehali.dev/b9736970-2710-4830-9cbf-3b2f015371be";
 
-  const handleExportSource = useCallback(async () => {
-    if (!ghSettings.token || !ghSettings.repo) {
-      setSettingsOpen(true);
-      return;
-    }
-    setExportingSource(true);
-    setCycleStatus("reading");
-    setCycleLabel("Скачиваю исходники...");
-    try {
-      const res = await fetch(GITHUB_DOWNLOAD_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: ghSettings.token, repo: ghSettings.repo, branch: "main" }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.zip_b64) throw new Error(data.error || `HTTP ${res.status}`);
-
-      // Декодируем base64 → Blob → скачиваем
-      const binary = atob(data.zip_b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const repoName = ghSettings.repo.split("/")[1] || "lumen-source";
-      a.href = url;
-      a.download = `${repoName}-source.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setCycleStatus("done");
-      setCycleLabel("");
-      setMessages(prev => [...prev, {
-        id: ++msgCounter, role: "assistant",
-        text: `Исходники скачаны: ${repoName}-source.zip (${Math.round(data.size / 1024)} КБ)\nАрхив содержит весь проект: /src, /backend, конфиги.\nДля запуска: npm install → npm run build → папка /dist на хостинг.`,
-      }]);
-    } catch (err) {
-      setCycleStatus("error");
-      setCycleLabel("");
-      const errText = err instanceof Error ? err.message : String(err);
-      // Fallback — открываем GitHub напрямую
-      const [owner, repo] = ghSettings.repo.split("/");
-      window.open(`https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`, "_blank");
-      setMessages(prev => [...prev, {
-        id: ++msgCounter, role: "assistant",
-        text: `Не удалось скачать через сервер (${errText}).\nОткрываю GitHub напрямую — авторизуйтесь на github.com и скачайте архив в открывшейся вкладке.`,
-      }]);
-    } finally {
-      setExportingSource(false);
-    }
-  }, [ghSettings]);
 
 
 
@@ -983,8 +1075,9 @@ ${urlList}
             cycleLabel={cycleLabel}
             onNewProject={handleNewProject}
             onExport={handleExport}
-            onExportSource={ghSettings.token && ghSettings.repo ? handleExportSource : undefined}
-            exportingSource={exportingSource}
+            onExportSource={(ghSettings.engineRepo || ghSettings.repo) ? handleSyncEngine : undefined}
+            exportingSource={syncingEngine}
+            selfEditActive={selfEditMode}
             onSettings={() => setSettingsOpen(true)}
             onLogout={logout}
           />
@@ -1110,6 +1203,10 @@ ${urlList}
             onSave={handleSaveSettings}
             ghSettings={ghSettings}
             onSaveGh={saveGhSettings}
+            selfEditMode={selfEditMode}
+            onSelfEditToggle={handleSelfEditToggle}
+            onSyncEngine={handleSyncEngine}
+            syncingEngine={syncingEngine}
           />
         </motion.div>
       )}
