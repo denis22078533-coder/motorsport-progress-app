@@ -9,6 +9,7 @@ interface Props {
   onExportSource?: () => void;
   exportingSource?: boolean;
   selfEditActive?: boolean;
+  isAdmin?: boolean;
   onSettings: () => void;
   onLogout: () => void;
 }
@@ -20,7 +21,7 @@ const STATUS_MAP = {
   error:      { dot: "bg-red-500",                   text: "text-red-400" },
 };
 
-export default function LumenTopBar({ status, cycleLabel, selfEditActive, onSettings, onLogout }: Props) {
+export default function LumenTopBar({ status, cycleLabel, selfEditActive, isAdmin, onSettings, onLogout }: Props) {
   const s = STATUS_MAP[status];
 
   return (
@@ -61,12 +62,14 @@ export default function LumenTopBar({ status, cycleLabel, selfEditActive, onSett
             <span className="text-amber-400 text-[10px] font-semibold">Self-Edit</span>
           </div>
         )}
-        <button
-          onClick={onSettings}
-          className="w-7 h-7 rounded-md flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
-        >
-          <Icon name="Settings" size={14} />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={onSettings}
+            className="w-7 h-7 rounded-md flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+          >
+            <Icon name="Settings" size={14} />
+          </button>
+        )}
 
         <button
           onClick={onLogout}

@@ -1352,6 +1352,7 @@ ${urlList}
               status={topStatus}
               cycleLabel={cycleLabel}
               selfEditActive={selfEditMode}
+              isAdmin={authed}
               onSettings={() => setSettingsOpen(true)}
               onLogout={logout}
             />
