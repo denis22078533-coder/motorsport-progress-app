@@ -5,6 +5,7 @@ import LumenTopBar from "./LumenTopBar";
 import LivePreview from "./LivePreview";
 import ChatPanel, { ChatMode } from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
+import LumenLoginPage from "./LumenLoginPage";
 import HomePage from "./HomePage";
 import BottomNav, { Tab } from "./BottomNav";
 import AntWorker from "./AntWorker";
@@ -187,7 +188,7 @@ Rules:
 let msgCounter = 0;
 
 export default function LumenApp() {
-  const { authed, login, logout } = useLumenAuth();
+  const { loggedIn, authed, login, adminLogin, logout } = useLumenAuth();
   const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub, syncEngine } = useGitHub();
 
   const liveUrl = (() => {
@@ -1335,7 +1336,7 @@ ${urlList}
   const [adminError, setAdminError] = useState(false);
 
   const handleAdminLogin = () => {
-    const ok = login(adminPassword);
+    const ok = adminLogin(adminPassword);
     if (ok) {
       setAdminModalOpen(false);
       setAdminPassword("");
@@ -1359,6 +1360,11 @@ ${urlList}
 
   return (
     <AnimatePresence mode="wait">
+      {!loggedIn ? (
+        <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+          <LumenLoginPage onLogin={login} />
+        </motion.div>
+      ) : (
         <motion.div
           key="app"
           initial={{ opacity: 0 }}
@@ -1664,6 +1670,7 @@ ${urlList}
             convertingZip={convertingZip}
           />
         </motion.div>
+      )}
     </AnimatePresence>
   );
 }
