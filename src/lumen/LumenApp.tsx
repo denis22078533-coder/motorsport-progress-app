@@ -222,6 +222,15 @@ export default function LumenApp() {
   const [selfEditMode, setSelfEditMode] = useState<boolean>(() => {
     try { return localStorage.getItem("lumen_self_edit") === "1"; } catch { return false; }
   });
+
+  // Публичный ИИ-режим — разрешает всем пользователям использовать чат
+  const [publicAiEnabled, setPublicAiEnabled] = useState<boolean>(() => {
+    try { return localStorage.getItem("lumen_public_ai") === "1"; } catch { return false; }
+  });
+  const handlePublicAiToggle = (v: boolean) => {
+    setPublicAiEnabled(v);
+    try { localStorage.setItem("lumen_public_ai", v ? "1" : "0"); } catch (_e) { /* ignore */ }
+  };
   const handleSelfEditToggle = (v: boolean) => {
     setSelfEditMode(v);
     try { localStorage.setItem("lumen_self_edit", v ? "1" : "0"); } catch { /* ignore */ }
@@ -1440,25 +1449,37 @@ ${urlList}
 
                   <div className="flex-1 min-h-0 overflow-hidden relative md:flex md:gap-2 md:p-2">
                     <div className={`flex flex-col h-full md:w-[420px] md:flex-none bg-[#0a0a0f] md:static ${mobileTab === "chat" ? "absolute inset-0 z-10 flex" : "hidden md:flex"}`}>
-                      <ChatPanel
-                        status={cycleStatus}
-                        cycleLabel={cycleLabel}
-                        messages={messages}
-                        onSend={handleSend}
-                        onStop={handleStop}
-                        onApply={handleApply}
-                        deployingId={deployingId}
-                        deployResult={deployResult}
-                        liveUrl={liveUrl}
-                        onOpenPreview={() => setMobileTab("preview")}
-                        onLoadFromGitHub={handleLoadFromGitHub}
-                        loadingFromGitHub={loadingFromGitHub}
-                        currentFilePath={ghSettings.filePath || "index.html"}
-                        onLoadLocalFile={() => fileInputRef.current?.click()}
-                        hasLocalFile={!!fullCodeContext}
-                        localFileName={fullCodeContext?.fileName}
-                        pendingSql={pendingSql}
-                      />
+                      {!authed && !publicAiEnabled ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-3xl">
+                            🐜
+                          </div>
+                          <div>
+                            <h3 className="text-white/70 font-semibold text-base mb-1">Муравей временно спит</h3>
+                            <p className="text-white/30 text-sm leading-relaxed">ИИ-режим ещё не включён. Обратитесь к администратору.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <ChatPanel
+                          status={cycleStatus}
+                          cycleLabel={cycleLabel}
+                          messages={messages}
+                          onSend={handleSend}
+                          onStop={handleStop}
+                          onApply={handleApply}
+                          deployingId={deployingId}
+                          deployResult={deployResult}
+                          liveUrl={liveUrl}
+                          onOpenPreview={() => setMobileTab("preview")}
+                          onLoadFromGitHub={handleLoadFromGitHub}
+                          loadingFromGitHub={loadingFromGitHub}
+                          currentFilePath={ghSettings.filePath || "index.html"}
+                          onLoadLocalFile={() => fileInputRef.current?.click()}
+                          hasLocalFile={!!fullCodeContext}
+                          localFileName={fullCodeContext?.fileName}
+                          pendingSql={pendingSql}
+                        />
+                      )}
                     </div>
                     <div className={`flex flex-col h-full flex-1 min-w-0 ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}>
                       <LivePreview
@@ -1519,14 +1540,16 @@ ${urlList}
                     </div>
                   </div>
                   <div className="px-4 py-4 flex flex-col gap-2">
-                    <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-3 px-4 py-3.5 bg-white/[0.04] border border-white/[0.07] rounded-xl text-left hover:bg-white/[0.07] transition-all">
-                      <span className="text-xl">⚙️</span>
-                      <div>
-                        <div className="text-white/80 text-sm font-medium">Настройки</div>
-                        <div className="text-white/30 text-xs">API ключи, GitHub, модель</div>
-                      </div>
-                      <span className="text-white/20 ml-auto">→</span>
-                    </button>
+                    {authed && (
+                      <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-3 px-4 py-3.5 bg-white/[0.04] border border-white/[0.07] rounded-xl text-left hover:bg-white/[0.07] transition-all">
+                        <span className="text-xl">⚙️</span>
+                        <div>
+                          <div className="text-white/80 text-sm font-medium">Настройки</div>
+                          <div className="text-white/30 text-xs">API ключи, GitHub, модель</div>
+                        </div>
+                        <span className="text-white/20 ml-auto">→</span>
+                      </button>
+                    )}
                     <button onClick={logout} className="flex items-center gap-3 px-4 py-3.5 bg-red-500/[0.05] border border-red-500/20 rounded-xl text-left hover:bg-red-500/[0.10] transition-all">
                       <span className="text-xl">🚪</span>
                       <div>
@@ -1553,6 +1576,8 @@ ${urlList}
             onSaveGh={saveGhSettings}
             selfEditMode={selfEditMode}
             onSelfEditToggle={handleSelfEditToggle}
+            publicAiEnabled={publicAiEnabled}
+            onPublicAiToggle={handlePublicAiToggle}
             onSyncEngine={handleSyncEngine}
             syncingEngine={syncingEngine}
             onLoadZip={() => zipInputRef.current?.click()}

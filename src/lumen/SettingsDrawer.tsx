@@ -20,6 +20,8 @@ interface Props {
   onSaveGh: (s: GitHubSettings) => void;
   selfEditMode: boolean;
   onSelfEditToggle: (v: boolean) => void;
+  publicAiEnabled: boolean;
+  onPublicAiToggle: (v: boolean) => void;
   onSyncEngine?: () => void;
   syncingEngine?: boolean;
   onLoadZip?: () => void;
@@ -59,7 +61,8 @@ const label = "text-white/40 text-xs font-medium uppercase tracking-wider block 
 
 export default function SettingsDrawer({
   open, onClose, settings, onSave, ghSettings, onSaveGh,
-  selfEditMode, onSelfEditToggle, onSyncEngine, syncingEngine, onLoadZip, convertingZip,
+  selfEditMode, onSelfEditToggle, publicAiEnabled, onPublicAiToggle,
+  onSyncEngine, syncingEngine, onLoadZip, convertingZip,
 }: Props) {
   const [tab, setTab] = useState<Tab>("ai");
   const [form, setForm] = useState(settings);
@@ -276,6 +279,39 @@ export default function SettingsDrawer({
               {/* ─── TAB: Engine & Admin ──────────────────────────────── */}
               {tab === "engine" && (
                 <>
+                  {/* Публичный ИИ-режим */}
+                  <div className={`border rounded-xl p-4 ${publicAiEnabled ? "bg-emerald-500/5 border-emerald-500/30" : "bg-white/[0.03] border-white/[0.08]"}`}>
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${publicAiEnabled ? "bg-emerald-500/15 border border-emerald-500/30" : "bg-white/[0.05] border border-white/10"}`}>
+                        <Icon name="Zap" size={14} className={publicAiEnabled ? "text-emerald-400" : "text-white/30"} />
+                      </div>
+                      <p className={`text-sm font-semibold flex-1 ${publicAiEnabled ? "text-emerald-300" : "text-white/50"}`}>Включить ИИ для всех</p>
+                      <button
+                        onClick={() => onPublicAiToggle(!publicAiEnabled)}
+                        className={`relative w-11 h-6 rounded-full border transition-all shrink-0 ${
+                          publicAiEnabled
+                            ? "bg-emerald-500/30 border-emerald-500/50"
+                            : "bg-white/[0.05] border-white/10"
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full transition-all shadow-sm ${
+                          publicAiEnabled
+                            ? "translate-x-5 bg-emerald-400"
+                            : "translate-x-0.5 bg-white/20"
+                        }`} />
+                      </button>
+                    </div>
+                    <p className="text-white/35 text-xs leading-relaxed pl-9">
+                      Когда включено — любой пользователь может создавать сайты через Муравья. Используются твои API-ключи и настройки модели.
+                    </p>
+                    {publicAiEnabled && (
+                      <div className="mt-3 flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                        <span className="text-emerald-300 text-xs font-medium">Режим активен — Муравей доступен всем</span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Self-Edit Mode */}
                   <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
                     {/* Заголовок + тумблер */}
