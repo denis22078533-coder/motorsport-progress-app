@@ -31,12 +31,12 @@ interface Props {
 const MODELS = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini", "o1-mini"],
   claude: [
-    "claude-opus-4-5",
+    "claude-sonnet-4-6",
     "claude-sonnet-4-5",
+    "claude-opus-4-5",
     "claude-haiku-4-5",
     "claude-3-5-sonnet-20241022",
     "claude-3-5-haiku-20241022",
-    "claude-3-opus-20240229",
   ],
 };
 
@@ -46,13 +46,15 @@ const MODEL_LABELS: Record<string, string> = {
   "gpt-4-turbo": "GPT-4 Turbo",
   "o3-mini": "o3-mini — рассуждения",
   "o1-mini": "o1-mini — рассуждения",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6 — новейший",
+  "claude-sonnet-4-5": "Claude Sonnet 4.5 — топ",
   "claude-opus-4-5": "Claude Opus 4.5 — максимум",
-  "claude-sonnet-4-5": "Claude Sonnet 4.5 — баланс",
   "claude-haiku-4-5": "Claude Haiku 4.5 — быстрый",
-  "claude-3-5-sonnet-20241022": "Claude Sonnet 3.5 — топ",
+  "claude-3-5-sonnet-20241022": "Claude Sonnet 3.5",
   "claude-3-5-haiku-20241022": "Claude Haiku 3.5",
-  "claude-3-opus-20240229": "Claude Opus 3",
 };
+
+const MODEL_RECOMMENDED = new Set(["claude-sonnet-4-6", "claude-sonnet-4-5", "gpt-4o"]);
 
 type Tab = "ai" | "github" | "engine";
 
@@ -179,7 +181,12 @@ export default function SettingsDrawer({
                           }`}
                         >
                           <span className="flex flex-col">
-                            <span className="font-medium leading-tight">{MODEL_LABELS[m] ?? m}</span>
+                            <span className="font-medium leading-tight flex items-center gap-1.5">
+                              {MODEL_LABELS[m] ?? m}
+                              {MODEL_RECOMMENDED.has(m) && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#9333ea]/20 text-purple-400 border border-purple-500/20 leading-none">★</span>
+                              )}
+                            </span>
                             <span className="font-mono text-[10px] opacity-50 leading-tight">{m}</span>
                           </span>
                           {form.model === m && <Icon name="Check" size={13} className="text-[#9333ea] shrink-0" />}
