@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Icon from "@/components/ui/icon";
 import LumenTopBar from "./LumenTopBar";
 import LivePreview from "./LivePreview";
 import ChatPanel, { ChatMode } from "./ChatPanel";
 import SettingsDrawer from "./SettingsDrawer";
-import LumenLoginPage from "./LumenLoginPage";
 import HomePage from "./HomePage";
 import BottomNav, { Tab } from "./BottomNav";
 import AntWorker from "./AntWorker";
@@ -1330,13 +1330,35 @@ ${urlList}
 
   const isGenerating = cycleStatus === "generating" || cycleStatus === "reading";
 
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminError, setAdminError] = useState(false);
+
+  const handleAdminLogin = () => {
+    const ok = login(adminPassword);
+    if (ok) {
+      setAdminModalOpen(false);
+      setAdminPassword("");
+      setAdminError(false);
+      setSettingsOpen(true);
+    } else {
+      setAdminError(true);
+      setAdminPassword("");
+    }
+  };
+
+  const handleSettingsClick = () => {
+    if (authed) {
+      setSettingsOpen(true);
+    } else {
+      setAdminModalOpen(true);
+      setAdminError(false);
+      setAdminPassword("");
+    }
+  };
+
   return (
     <AnimatePresence mode="wait">
-      {!authed ? (
-        <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-          <LumenLoginPage onLogin={login} />
-        </motion.div>
-      ) : (
         <motion.div
           key="app"
           initial={{ opacity: 0 }}
@@ -1346,6 +1368,63 @@ ${urlList}
           className="h-dvh flex flex-col bg-[#07070c] overflow-hidden"
           style={{ maxWidth: "100vw" }}
         >
+          {/* Admin password modal */}
+          <AnimatePresence>
+            {adminModalOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+                onClick={(e) => { if (e.target === e.currentTarget) { setAdminModalOpen(false); setAdminPassword(""); setAdminError(false); } }}
+              >
+                <motion.div
+                  initial={{ scale: 0.92, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.92, opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="w-full max-w-sm bg-[#111118] border border-white/[0.08] rounded-2xl p-6 flex flex-col gap-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#9333ea]/10 border border-[#9333ea]/20 flex items-center justify-center">
+                      <Icon name="Lock" size={16} className="text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-semibold text-sm">Доступ к настройкам</h3>
+                      <p className="text-white/30 text-xs">Введите пароль администратора</p>
+                    </div>
+                  </div>
+                  <input
+                    type="password"
+                    value={adminPassword}
+                    onChange={(e) => { setAdminPassword(e.target.value); setAdminError(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAdminLogin(); if (e.key === "Escape") { setAdminModalOpen(false); setAdminPassword(""); setAdminError(false); } }}
+                    placeholder="Пароль"
+                    autoFocus
+                    className={`w-full h-10 bg-white/[0.04] border rounded-xl px-3 text-white/80 text-sm placeholder:text-white/20 outline-none transition-colors ${adminError ? "border-red-500/50 focus:border-red-500/70" : "border-white/[0.08] focus:border-[#9333ea]/40"}`}
+                  />
+                  {adminError && (
+                    <p className="text-red-400 text-xs -mt-2">Неверный пароль</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setAdminModalOpen(false); setAdminPassword(""); setAdminError(false); }}
+                      className="flex-1 h-9 rounded-xl border border-white/[0.08] text-white/40 text-sm hover:bg-white/[0.04] transition-colors"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      onClick={handleAdminLogin}
+                      className="flex-1 h-9 rounded-xl bg-[#9333ea] hover:bg-[#7e22ce] text-white text-sm font-semibold transition-colors"
+                    >
+                      Войти
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Show TopBar only on chat/preview tabs (desktop-like) */}
           {(activeTab === "chat" || activeTab === "projects") && (
             <LumenTopBar
@@ -1353,8 +1432,8 @@ ${urlList}
               cycleLabel={cycleLabel}
               selfEditActive={selfEditMode}
               isAdmin={authed}
-              onSettings={() => setSettingsOpen(true)}
-              onLogout={logout}
+              onSettings={handleSettingsClick}
+              onLogout={authed ? logout : undefined}
             />
           )}
 
@@ -1541,23 +1620,23 @@ ${urlList}
                     </div>
                   </div>
                   <div className="px-4 py-4 flex flex-col gap-2">
+                    <button onClick={handleSettingsClick} className="flex items-center gap-3 px-4 py-3.5 bg-white/[0.04] border border-white/[0.07] rounded-xl text-left hover:bg-white/[0.07] transition-all">
+                      <span className="text-xl">⚙️</span>
+                      <div>
+                        <div className="text-white/80 text-sm font-medium">Настройки</div>
+                        <div className="text-white/30 text-xs">{authed ? "API ключи, GitHub, модель" : "Только для администратора"}</div>
+                      </div>
+                      <span className="text-white/20 ml-auto">→</span>
+                    </button>
                     {authed && (
-                      <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-3 px-4 py-3.5 bg-white/[0.04] border border-white/[0.07] rounded-xl text-left hover:bg-white/[0.07] transition-all">
-                        <span className="text-xl">⚙️</span>
+                      <button onClick={logout} className="flex items-center gap-3 px-4 py-3.5 bg-red-500/[0.05] border border-red-500/20 rounded-xl text-left hover:bg-red-500/[0.10] transition-all">
+                        <span className="text-xl">🚪</span>
                         <div>
-                          <div className="text-white/80 text-sm font-medium">Настройки</div>
-                          <div className="text-white/30 text-xs">API ключи, GitHub, модель</div>
+                          <div className="text-red-400 text-sm font-medium">Выйти из режима администратора</div>
+                          <div className="text-white/30 text-xs">Завершить сессию</div>
                         </div>
-                        <span className="text-white/20 ml-auto">→</span>
                       </button>
                     )}
-                    <button onClick={logout} className="flex items-center gap-3 px-4 py-3.5 bg-red-500/[0.05] border border-red-500/20 rounded-xl text-left hover:bg-red-500/[0.10] transition-all">
-                      <span className="text-xl">🚪</span>
-                      <div>
-                        <div className="text-red-400 text-sm font-medium">Выйти</div>
-                        <div className="text-white/30 text-xs">Завершить сессию</div>
-                      </div>
-                    </button>
                   </div>
                 </motion.div>
               )}
@@ -1585,7 +1664,6 @@ ${urlList}
             convertingZip={convertingZip}
           />
         </motion.div>
-      )}
     </AnimatePresence>
   );
 }

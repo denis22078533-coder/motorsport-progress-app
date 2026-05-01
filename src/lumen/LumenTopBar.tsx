@@ -11,7 +11,7 @@ interface Props {
   selfEditActive?: boolean;
   isAdmin?: boolean;
   onSettings: () => void;
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
 const STATUS_MAP = {
@@ -62,22 +62,29 @@ export default function LumenTopBar({ status, cycleLabel, selfEditActive, isAdmi
             <span className="text-amber-400 text-[10px] font-semibold">Self-Edit</span>
           </div>
         )}
-        {isAdmin && (
+
+        {/* Шестерёнка — всем видна, но при клике запрашивает пароль если не admin */}
+        <button
+          onClick={onSettings}
+          title={isAdmin ? "Настройки" : "Настройки (только для администратора)"}
+          className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
+            isAdmin
+              ? "text-white/40 hover:text-white/80 hover:bg-white/[0.06]"
+              : "text-white/15 hover:text-white/30 hover:bg-white/[0.03]"
+          }`}
+        >
+          <Icon name="Settings" size={14} />
+        </button>
+
+        {isAdmin && onLogout && (
           <button
-            onClick={onSettings}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+            onClick={onLogout}
+            title="Выйти из режима администратора"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-white/25 hover:text-red-400 hover:bg-red-500/[0.08] transition-colors"
           >
-            <Icon name="Settings" size={14} />
+            <Icon name="LogOut" size={13} />
           </button>
         )}
-
-        <button
-          onClick={onLogout}
-          title="Выйти"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-white/25 hover:text-red-400 hover:bg-red-500/[0.08] transition-colors"
-        >
-          <Icon name="LogOut" size={13} />
-        </button>
       </div>
     </motion.header>
   );
