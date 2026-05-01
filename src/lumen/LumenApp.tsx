@@ -11,6 +11,8 @@ import BottomNav, { Tab } from "./BottomNav";
 import AntWorker from "./AntWorker";
 import { useLumenAuth } from "./useLumenAuth";
 import { useGitHub } from "./useGitHub";
+import { useMuraveyBalance } from "./useMuraveyBalance";
+import PaywallModal from "./PaywallModal";
 
 type CycleStatus = "idle" | "reading" | "generating" | "done" | "error";
 type MobileTab = "chat" | "preview";
@@ -190,6 +192,18 @@ let msgCounter = 0;
 export default function LumenApp() {
   const { loggedIn, authed, login, adminLogin, logout } = useLumenAuth();
   const { ghSettings, saveGhSettings, fetchFromGitHub, pushToGitHub, syncEngine } = useGitHub();
+
+  // Баланс запросов (только для обычных пользователей)
+  const {
+    balance: muraveyBalance,
+    spendRequest,
+    createPayment,
+    checkPayment,
+    confirmTestPayment,
+    restoreByEmail,
+    fetchBalance,
+  } = useMuraveyBalance(authed);
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   const liveUrl = (() => {
     if (ghSettings.siteUrl?.trim()) {
@@ -1025,6 +1039,16 @@ ${PROJECT_STRUCTURE}`;
 
   const handleSend = useCallback(async (text: string, mode: ChatMode = "site") => {
     abortRef.current = false;
+
+    // Проверяем баланс для обычных пользователей
+    if (!authed) {
+      const canSend = await spendRequest();
+      if (!canSend) {
+        setPaywallOpen(true);
+        return;
+      }
+    }
+
     const userMsg: Message = { id: ++msgCounter, role: "user", text };
     setMessages(prev => [...prev, userMsg]);
     setDeployResult(null);
@@ -1197,7 +1221,7 @@ ${urlList}
         setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
       }
     }
-  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath, fullCodeContext, liveUrl, handleSendChat, handleSendImage, handleSqlRequest]);
+  }, [settings, ghSettings, fetchFromGitHub, pushToGitHub, currentFilePath, fullCodeContext, liveUrl, handleSendChat, handleSendImage, handleSqlRequest, authed, spendRequest]);
 
   const handleApply = useCallback(async (msgId: number, html: string) => {
     if (!ghSettings.token) { setSettingsOpen(true); return; }
@@ -1626,6 +1650,28 @@ ${urlList}
                     </div>
                   </div>
                   <div className="px-4 py-4 flex flex-col gap-2">
+                    {/* Баланс запросов для обычных пользователей */}
+                    {!authed && muraveyBalance && (
+                      <div className={`flex items-center justify-between px-4 py-3.5 rounded-xl border ${muraveyBalance.total_requests_left === 0 ? "bg-red-500/[0.05] border-red-500/20" : "bg-[#f59e0b]/[0.05] border-[#f59e0b]/20"}`}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">🐜</span>
+                          <div>
+                            <div className="text-white/80 text-sm font-medium">Запросы к Муравью</div>
+                            <div className={`text-xs ${muraveyBalance.total_requests_left === 0 ? "text-red-400" : "text-[#f59e0b]/70"}`}>
+                              {muraveyBalance.total_requests_left === 0
+                                ? "Запросы закончились"
+                                : `Осталось ${muraveyBalance.total_requests_left} запросов`}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setPaywallOpen(true)}
+                          className="text-xs font-semibold text-[#f59e0b] hover:text-[#f59e0b]/80 transition-colors shrink-0"
+                        >
+                          Пополнить →
+                        </button>
+                      </div>
+                    )}
                     <button onClick={handleSettingsClick} className="flex items-center gap-3 px-4 py-3.5 bg-white/[0.04] border border-white/[0.07] rounded-xl text-left hover:bg-white/[0.07] transition-all">
                       <span className="text-xl">⚙️</span>
                       <div>
@@ -1668,6 +1714,17 @@ ${urlList}
             syncingEngine={syncingEngine}
             onLoadZip={() => zipInputRef.current?.click()}
             convertingZip={convertingZip}
+          />
+
+          <PaywallModal
+            open={paywallOpen}
+            onClose={() => setPaywallOpen(false)}
+            freeRequestsLeft={muraveyBalance?.free_requests_left ?? 0}
+            onCreatePayment={createPayment}
+            onCheckPayment={checkPayment}
+            onConfirmTest={confirmTestPayment}
+            onRestoreByEmail={restoreByEmail}
+            onPaid={() => { fetchBalance(); setPaywallOpen(false); }}
           />
         </motion.div>
       )}
