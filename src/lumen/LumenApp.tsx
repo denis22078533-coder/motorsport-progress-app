@@ -30,6 +30,7 @@ interface Settings {
   model: string;
   baseUrl: string;
   proxyUrl: string;
+  customPrompt?: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS: Settings = {
   model: "gpt-4o-mini",
   baseUrl: import.meta.env.VITE_DEFAULT_OPENAI_BASE || "https://proxyapi.ru",
   proxyUrl: import.meta.env.VITE_AI_PROXY_URL || "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba",
+  customPrompt: "",
 };
 
 
@@ -1081,11 +1083,12 @@ ${PROJECT_STRUCTURE}`;
     try {
       // ── Шаг 1: читаем текущий код ─────────────────────────────────────────
       let currentHtml = "";
-      let systemPrompt = CREATE_SYSTEM_PROMPT;
+      const customAddition = settings.customPrompt?.trim() ? `\n\n## Дополнительные инструкции от владельца:\n${settings.customPrompt.trim()}` : "";
+      let systemPrompt = CREATE_SYSTEM_PROMPT + customAddition;
 
       if (fullCodeContext) {
         currentHtml = fullCodeContext.html;
-        systemPrompt = LOCAL_FILE_EDIT_PROMPT(currentHtml, fullCodeContext.fileName);
+        systemPrompt = LOCAL_FILE_EDIT_PROMPT(currentHtml, fullCodeContext.fileName) + customAddition;
       } else if (ghSettings.token && ghSettings.repo) {
         setCycleStatus("reading");
         const filePath = (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
@@ -1095,7 +1098,7 @@ ${PROJECT_STRUCTURE}`;
           currentHtml = fetched.html;
           setCurrentFileSha(fetched.sha);
           setCurrentFilePath(fetched.filePath);
-          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml);
+          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml) + customAddition;
         }
       }
 

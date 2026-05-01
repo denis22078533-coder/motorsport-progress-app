@@ -9,6 +9,7 @@ interface AISettings {
   model: string;
   baseUrl: string;
   proxyUrl: string;
+  customPrompt?: string;
 }
 
 interface Props {
@@ -55,6 +56,37 @@ const MODEL_LABELS: Record<string, string> = {
 };
 
 const MODEL_RECOMMENDED = new Set(["claude-sonnet-4-6", "claude-sonnet-4-5", "gpt-4o"]);
+
+const MASTER_PROMPT = `Ты — профессиональный веб-дизайнер и разработчик с опытом 15+ лет. Твоя специализация — создание красивых, современных коммерческих сайтов для малого и среднего бизнеса.
+
+## Дизайн — твой главный приоритет:
+- Создавай сайты уровня Awwwards и Dribbble — с душой, характером и вниманием к деталям
+- Используй современные тренды: glassmorphism, градиенты, плавные анимации, микровзаимодействия
+- Типографика — крупная, смелая, читаемая. Google Fonts — всегда
+- Цветовые схемы — гармоничные, с акцентами. Никогда не используй дефолтные цвета
+- Hero-секции — всегда впечатляющие, с сильным заголовком и призывом к действию
+- Адаптивность — идеальная на мобильных, планшетах и десктопе
+
+## Структура каждого сайта:
+1. Hero — мощный заголовок + подзаголовок + кнопка CTA + фоновый визуал
+2. Преимущества — 3-6 карточек с иконками Lucide
+3. О нас / Услуги — с конкретикой и цифрами
+4. Портфолио / Примеры — если применимо
+5. Отзывы клиентов — 2-3 карточки с именами и фото-аватарами
+6. Призыв к действию (CTA) — яркая секция с формой или кнопкой
+7. Футер — контакты, соцсети, копирайт
+
+## Технические требования:
+- Lucide icons через CDN для всех иконок
+- CSS-анимации: плавное появление секций при скролле (Intersection Observer)
+- Hover-эффекты на всех кликабельных элементах
+- Формы — красивые, с плейсхолдерами и валидацией
+- Скорость загрузки — минимум внешних запросов
+
+## Тон и контент:
+- Пиши убедительные продающие тексты, не заглушки
+- Используй конкретные цифры и факты
+- Заголовки — сильные, цепляющие, ориентированные на выгоду клиента`;
 
 type Tab = "ai" | "github" | "engine";
 
@@ -222,6 +254,26 @@ export default function SettingsDrawer({
                     <label className={label}>Proxy URL (шлюз)</label>
                     <input type="text" value={form.proxyUrl} onChange={e => setForm(f => ({ ...f, proxyUrl: e.target.value.trim() }))} placeholder="https://functions.poehali.dev/..." className={inp} />
                     <p className="text-white/20 text-xs mt-1.5">URL cloud-функции для запросов к ИИ.</p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className={label + " mb-0"}>Системный промпт (личность ИИ)</label>
+                      <button
+                        onClick={() => setForm(f => ({ ...f, customPrompt: MASTER_PROMPT }))}
+                        className="text-[10px] font-semibold text-[#9333ea] hover:text-purple-300 border border-[#9333ea]/30 hover:border-[#9333ea]/60 rounded-md px-2 py-1 transition-all bg-[#9333ea]/5 hover:bg-[#9333ea]/10 whitespace-nowrap"
+                      >
+                        ★ Вставить мастер-промпт
+                      </button>
+                    </div>
+                    <textarea
+                      value={form.customPrompt ?? ""}
+                      onChange={e => setForm(f => ({ ...f, customPrompt: e.target.value }))}
+                      placeholder="Опиши кто такой твой ИИ, в каком стиле создаёт сайты, что важно для твоих клиентов..."
+                      rows={6}
+                      className={inp + " py-2.5 resize-none h-auto leading-relaxed"}
+                    />
+                    <p className="text-white/20 text-xs mt-1.5">Добавляется к каждому запросу. Сделает Муравья умнее под твои задачи.</p>
                   </div>
 
                   <div className="bg-[#9333ea]/5 border border-[#9333ea]/15 rounded-xl p-3.5 flex items-start gap-2.5">
