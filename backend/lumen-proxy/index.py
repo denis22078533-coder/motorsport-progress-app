@@ -82,33 +82,61 @@ def parse_claude_stream(raw: str) -> str:
     return "".join(result)
 
 
-def search_product_image_unsplash(query: str) -> str | None:
-    """Ищет фото через Unsplash (бесплатный публичный API)"""
+def search_via_google_cse(query: str, api_key: str, cx: str) -> str | None:
+    """Ищет фото через Google Custom Search API"""
     try:
         encoded = urllib.parse.quote(query)
-        url = f"https://source.unsplash.com/featured/800x600/?{encoded}"
+        url = f"https://www.googleapis.com/customsearch/v1?q={encoded}&searchType=image&num=5&key={api_key}&cx={cx}&imgSize=medium&safe=active"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        # Unsplash делает redirect — нам нужен финальный URL
-        import http.client
-        # Делаем HEAD запрос чтобы получить redirect URL
-        parsed = urllib.parse.urlparse(url)
-        conn = http.client.HTTPSConnection(parsed.netloc, timeout=10)
-        conn.request("HEAD", parsed.path + (f"?{parsed.query}" if parsed.query else ""), headers={'User-Agent': 'Mozilla/5.0'})
-        resp = conn.getresponse()
-        location = resp.getheader('Location')
-        if location and location.startswith('http'):
-            print(f'[search-image] unsplash: {location}')
-            return location
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        items = data.get('items', [])
+        for item in items:
+            link = item.get('link', '')
+            if link and link.startswith('http'):
+                print(f'[search-image] google cse: {link}')
+                return link
     except Exception as e:
-        print(f'[search-image] unsplash error: {e}')
+        print(f'[search-image] google cse error: {e}')
+    return None
+
+
+def search_via_wikimedia(query: str) -> str | None:
+    """Ищет фото через Wikimedia Commons API (бесплатно, без ключей)"""
+    try:
+        encoded = urllib.parse.quote(query)
+        url = f"https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch={encoded}&srnamespace=6&srlimit=5&format=json"
+        req = urllib.request.Request(url, headers={'User-Agent': 'ProductImageBot/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        results = data.get('query', {}).get('search', [])
+        for item in results:
+            title = item.get('title', '')
+            if title:
+                # Получаем прямую ссылку на файл
+                file_encoded = urllib.parse.quote(title)
+                url2 = f"https://commons.wikimedia.org/w/api.php?action=query&titles={file_encoded}&prop=imageinfo&iiprop=url&format=json"
+                req2 = urllib.request.Request(url2, headers={'User-Agent': 'ProductImageBot/1.0'})
+                with urllib.request.urlopen(req2, timeout=8) as r2:
+                    data2 = json.loads(r2.read().decode('utf-8'))
+                pages = data2.get('query', {}).get('pages', {})
+                for page in pages.values():
+                    img_url = page.get('imageinfo', [{}])[0].get('url', '')
+                    if img_url and img_url.startswith('http'):
+                        print(f'[search-image] wikimedia: {img_url}')
+                        return img_url
+    except Exception as e:
+        print(f'[search-image] wikimedia error: {e}')
     return None
 
 
 def generate_product_image_pollinations(name: str, article: str) -> str | None:
-    """Генерирует фото товара через Pollinations.ai если поиск не нашёл"""
+    """Генерирует реалистичное фото товара через Pollinations.ai"""
     try:
         import time
-        query = f"product photo of {name} {article}, white background, professional, high quality".strip()
+        # Строим точный промпт с названием товара
+        product_desc = name if name else article
+        query = f"professional product photo {product_desc}, isolated on white background, sharp focus, studio lighting, e-commerce style, high quality, real photo"
         encoded = urllib.parse.quote(query)
         seed = int(time.time()) % 99999
         url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=800&seed={seed}&nologo=true&model=flux"
@@ -120,17 +148,28 @@ def generate_product_image_pollinations(name: str, article: str) -> str | None:
 
 
 def search_product_image(article: str, name: str) -> str | None:
-    """Ищет или генерирует фото товара по артикулу и/или названию"""
-    search_query = name or article
+    """Ищет фото товара: сначала Google CSE (если есть ключ), затем Wikimedia, затем генерирует через AI"""
+    import os
 
-    # Пробуем Unsplash
-    img = search_product_image_unsplash(search_query)
-    if img:
-        return img
+    google_key = os.environ.get('GOOGLE_CSE_KEY', '')
+    google_cx = os.environ.get('GOOGLE_CSE_CX', '')
 
-    # Fallback — генерируем через Pollinations
-    img = generate_product_image_pollinations(name, article)
-    return img
+    # 1. Google Custom Search (если настроен)
+    if google_key and google_cx:
+        query = f"{name} {article}".strip() or name or article
+        img = search_via_google_cse(query, google_key, google_cx)
+        if img:
+            return img
+
+    # 2. Wikimedia Commons — реальные фото товаров/инструментов
+    search_query = (name or article).strip()
+    if search_query:
+        img = search_via_wikimedia(search_query)
+        if img:
+            return img
+
+    # 3. Fallback — AI-генерация точного фото товара
+    return generate_product_image_pollinations(name, article)
 
 
 def handler(event: dict, context) -> dict:
