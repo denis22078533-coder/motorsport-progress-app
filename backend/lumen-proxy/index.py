@@ -1,6 +1,7 @@
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 import re
 
 
@@ -81,8 +82,59 @@ def parse_claude_stream(raw: str) -> str:
     return "".join(result)
 
 
+def search_product_image_unsplash(query: str) -> str | None:
+    """Ищет фото через Unsplash (бесплатный публичный API)"""
+    try:
+        encoded = urllib.parse.quote(query)
+        url = f"https://source.unsplash.com/featured/800x600/?{encoded}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        # Unsplash делает redirect — нам нужен финальный URL
+        import http.client
+        # Делаем HEAD запрос чтобы получить redirect URL
+        parsed = urllib.parse.urlparse(url)
+        conn = http.client.HTTPSConnection(parsed.netloc, timeout=10)
+        conn.request("HEAD", parsed.path + (f"?{parsed.query}" if parsed.query else ""), headers={'User-Agent': 'Mozilla/5.0'})
+        resp = conn.getresponse()
+        location = resp.getheader('Location')
+        if location and location.startswith('http'):
+            print(f'[search-image] unsplash: {location}')
+            return location
+    except Exception as e:
+        print(f'[search-image] unsplash error: {e}')
+    return None
+
+
+def generate_product_image_pollinations(name: str, article: str) -> str | None:
+    """Генерирует фото товара через Pollinations.ai если поиск не нашёл"""
+    try:
+        import time
+        query = f"product photo of {name} {article}, white background, professional, high quality".strip()
+        encoded = urllib.parse.quote(query)
+        seed = int(time.time()) % 99999
+        url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=800&seed={seed}&nologo=true&model=flux"
+        print(f'[search-image] pollinations: {url}')
+        return url
+    except Exception as e:
+        print(f'[search-image] pollinations error: {e}')
+    return None
+
+
+def search_product_image(article: str, name: str) -> str | None:
+    """Ищет или генерирует фото товара по артикулу и/или названию"""
+    search_query = name or article
+
+    # Пробуем Unsplash
+    img = search_product_image_unsplash(search_query)
+    if img:
+        return img
+
+    # Fallback — генерируем через Pollinations
+    img = generate_product_image_pollinations(name, article)
+    return img
+
+
 def handler(event: dict, context) -> dict:
-    """Проксирует запросы к OpenAI/Claude API со стримингом. api_key и base_url берутся из тела запроса."""
+    """Проксирует запросы к OpenAI/Claude API. Также поддерживает поиск фото товаров (__action__: search_image)."""
 
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
@@ -98,6 +150,17 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
     except Exception:
         return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Invalid JSON body"})}
+
+    # Поиск фото товара
+    if body.get("__action__") == "search_image":
+        article = body.get("article", "").strip()
+        name = body.get("name", "").strip()
+        if not article and not name:
+            return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "article or name required"})}
+        img_url = search_product_image(article, name)
+        if img_url:
+            return {"statusCode": 200, "headers": cors_headers, "body": json.dumps({"url": img_url, "article": article, "name": name})}
+        return {"statusCode": 404, "headers": cors_headers, "body": json.dumps({"error": "image not found"})}
 
     provider = body.pop("__provider__", "openai")
     api_key = (body.pop("__api_key__", "") or "").strip()

@@ -5,6 +5,24 @@
       "method": "OPTIONS",
       "path": "/",
       "expectedStatus": 200
+    },
+    {
+      "name": "Search product image by name",
+      "method": "POST",
+      "path": "/",
+      "body": {"__action__": "search_image", "name": "Болт М8"},
+      "expectedStatus": 200,
+      "expectedBody": {"url": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Search image missing params",
+      "method": "POST",
+      "path": "/",
+      "body": {"__action__": "search_image"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
     }
   ]
 }

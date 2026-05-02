@@ -689,6 +689,38 @@ export default function LumenApp() {
   };
 
   const IMAGE_GENERATE_URL = "https://functions.poehali.dev/0f178db7-a08a-4911-8f10-5f45a0d585a3";
+  const LUMEN_PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
+
+  const searchProductImage = async (article: string, name: string): Promise<string | null> => {
+    try {
+      const r = await fetch(LUMEN_PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ __action__: "search_image", article, name }),
+      });
+      const d = await r.json();
+      return d.url || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const detectProductRequest = (text: string): { article: string; name: string } | null => {
+    const lc = text.toLowerCase();
+    const isProductRequest = /карточк|товар|артикул|артикл|номенклатур|позиц|продукт|sku|код товар/i.test(lc);
+    if (!isProductRequest) return null;
+    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9\-_.]+)/i)
+      || text.match(/sku[:\s]*([A-Za-z0-9\-_.]+)/i)
+      || text.match(/код[:\s]*([A-Za-z0-9\-_.]+)/i)
+      || text.match(/[#№]\s*([A-Za-z0-9\-_.]+)/);
+    const nameMatch = text.match(/назван[иеие]+[:\s]+([^,\n.]+)/i)
+      || text.match(/товар[:\s]+([^,\n.]+)/i)
+      || text.match(/наименован[иеие]+[:\s]+([^,\n.]+)/i);
+    const article = articleMatch ? articleMatch[1].trim() : "";
+    const name = nameMatch ? nameMatch[1].trim() : "";
+    if (!article && !name) return null;
+    return { article, name };
+  };
 
   const handleSendImage = useCallback(async (text: string) => {
     setCycleStatus("generating");
@@ -1142,9 +1174,30 @@ ${PROJECT_STRUCTURE}`;
 
       if (abortRef.current) return;
 
-      // ── Шаг 1.5: генерируем картинки если нужны ──────────────────────────
+      // ── Шаг 1.5: поиск фото товара по артикулу / названию ────────────────
       let enrichedText = text;
-      const wantsImages = /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|товар|продукт|блюд|еда|ресторан|кафе|кофейн|магазин|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
+      const productInfo = detectProductRequest(text);
+      if (productInfo) {
+        setCycleStatus("generating");
+        setCycleLabel("Ищу фото товара...");
+        const productImgUrl = await searchProductImage(productInfo.article, productInfo.name);
+        if (productImgUrl) {
+          enrichedText = `${text}
+
+ВАЖНО: Я нашёл фото для товара. ОБЯЗАТЕЛЬНО используй его в карточке:
+Фото товара: ${productImgUrl}
+Артикул: ${productInfo.article || "не указан"}
+Название: ${productInfo.name || "не указано"}
+
+Требования:
+- Вставь это фото в карточку товара через <img src="${productImgUrl}" ...>
+- Карточка должна быть красивой: фото, название, артикул, цена (если указана), кнопка "В корзину" или "Заказать"
+- style="object-fit: cover" для фото`;
+        }
+      }
+
+      // ── Шаг 1.6: генерируем картинки если нужны ──────────────────────────
+      const wantsImages = !productInfo && /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|товар|продукт|блюд|еда|ресторан|кафе|кофейн|магазин|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
       if (wantsImages) {
         setCycleStatus("generating");
         setCycleLabel("Генерирую картинки...");
