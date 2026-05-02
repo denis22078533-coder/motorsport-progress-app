@@ -93,17 +93,39 @@ Then implement.
 ${PROJECT_STRUCTURE}`;
 
 const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
-## Task: Create a complete website
+## Task: Create a STUNNING, professional-grade website
 Output ONLY a full standalone HTML document (<!DOCTYPE html>...</html>). No explanations, no markdown fences.
-Technical requirements:
+
+## DESIGN QUALITY — THIS IS YOUR TOP PRIORITY:
+- Create websites worthy of Awwwards, Dribbble, Behance — NEVER generic templates
+- Bold, expressive typography: large hero headings (text-6xl/7xl+), clear hierarchy
+- Rich color palette: use gradients, soft shadows, and accent colors — NEVER plain white/gray defaults
+- CSS animations: fade-in on scroll (Intersection Observer), smooth hover transitions, subtle parallax
+- Cards with depth: border-radius, box-shadow, hover lift effects (transform: translateY(-4px))
+- Glassmorphism where fitting: backdrop-filter: blur(), semi-transparent backgrounds
+- Micro-interactions: button hover, nav link underlines, icon rotations
+
+## MANDATORY SITE STRUCTURE (all sections, every time):
+1. **Navigation** — sticky, logo + menu links + CTA button, blur backdrop
+2. **Hero** — full-screen or tall, punchy headline, subheadline, 2 CTA buttons, background visual (gradient/image/pattern)
+3. **Social proof** — logos or numbers (e.g., "500+ clients", "10 years on market", "98% satisfaction")
+4. **Features/Services** — 3-6 cards with Lucide icons, title, description
+5. **About / How it works** — with steps or story
+6. **Portfolio / Cases** — if applicable (grid of cards with hover overlay)
+7. **Testimonials** — 2-3 cards with name, role, avatar (colored initials circle), quote
+8. **FAQ** — accordion, 4-6 questions
+9. **CTA Section** — bold background, compelling headline, form or button
+10. **Footer** — logo, nav links, contacts, social icons, copyright
+
+## Technical requirements:
 - Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Lucide icons via CDN if needed: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-- Google Fonts via CDN for typography if needed
-- Default to light theme (white/light-gray background, dark text) unless explicitly asked for dark
-- All JS inline in <script> tags, no external files
-- Fully responsive, works on mobile and desktop
-- IMAGES: If ready image URLs are provided — use them directly. No placeholder images if real URLs exist.
-- For forms/payments — add skeleton structure with comments showing WHERE to integrate (ЮKassa/Robokassa/СДЭК)`;
+- Lucide icons via CDN: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+- Google Fonts via CDN — always pick 1-2 premium fonts matching the brand tone
+- All JS inline in <script> tags. Fully responsive mobile-first
+- Scroll animations: use IntersectionObserver to fade-in sections on scroll
+- IMAGES: Use provided URLs directly. For placeholders use gradient backgrounds, NOT external image services
+- For forms/payments — skeleton with clear comments for ЮKassa/Robokassa/СДЭК integration
+- Write REAL persuasive copy — not "Lorem ipsum" or generic placeholders. Make it specific and compelling.`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
@@ -581,14 +603,14 @@ export default function LumenApp() {
             { role: "system", content: systemPrompt },
             ...chatMessages,
           ],
-          max_tokens: 16000,
+          max_tokens: 32000,
         }
       : {
           __provider__: "claude",
           __base_url__: baseUrl,
           __api_key__: settings.apiKey.trim(),
           model: settings.model,
-          max_tokens: 16000,
+          max_tokens: 32000,
           system: systemPrompt,
           messages: chatMessages,
         };
@@ -1099,6 +1121,13 @@ ${PROJECT_STRUCTURE}`;
           setCurrentFileSha(fetched.sha);
           setCurrentFilePath(fetched.filePath);
           systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml) + customAddition;
+        } else if (!fetched.ok) {
+          const is404 = fetched.message?.includes("404");
+          if (!is404) {
+            // Реальная ошибка (токен, сеть) — прерываем и сообщаем
+            throw new Error(`Не удалось прочитать файл из GitHub: ${fetched.message}`);
+          }
+          // 404 = файла ещё нет, создаём с нуля (нормально для первого раза)
         }
       }
 
@@ -1591,6 +1620,8 @@ ${urlList}
                           hasLocalFile={!!fullCodeContext}
                           localFileName={fullCodeContext?.fileName}
                           pendingSql={pendingSql}
+                          hasGitHub={!!(ghSettings.token && ghSettings.repo)}
+                          onOpenSettings={() => setSettingsOpen(true)}
                         />
                       )}
                     </div>

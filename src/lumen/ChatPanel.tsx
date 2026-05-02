@@ -24,6 +24,8 @@ interface Props {
   hasLocalFile?: boolean;
   localFileName?: string;
   pendingSql?: { sql: string; explanation: string } | null;
+  hasGitHub?: boolean;
+  onOpenSettings?: () => void;
 }
 
 const SUGGESTIONS = [
@@ -69,6 +71,7 @@ export default function ChatPanel({
   deployingId, deployResult, liveUrl, onOpenPreview,
   onLoadFromGitHub, loadingFromGitHub, currentFilePath,
   onLoadLocalFile, hasLocalFile, localFileName, pendingSql,
+  hasGitHub, onOpenSettings,
 }: Props) {
   const [value, setValue] = useState("");
   const [kbOffset, setKbOffset] = useState(0);
@@ -176,7 +179,22 @@ export default function ChatPanel({
           transition={{ duration: 0.4 }}
         />
         <span className="text-white/60 text-xs font-medium tracking-wide uppercase">AI Ассистент</span>
-
+        <div className="ml-auto flex items-center gap-1.5">
+          {hasGitHub ? (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25">
+              <span className="w-1 h-1 rounded-full bg-emerald-400" />
+              <span className="text-emerald-400 text-[10px] font-medium">GitHub</span>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+            >
+              <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-amber-400 text-[10px] font-medium">Настроить GitHub</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
