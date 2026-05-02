@@ -101,32 +101,67 @@ def search_via_google_cse(query: str, api_key: str, cx: str) -> str | None:
     return None
 
 
-def search_via_wikimedia(query: str) -> str | None:
-    """Ищет фото через Wikimedia Commons API (бесплатно, без ключей)"""
+def search_via_duckduckgo(query: str) -> str | None:
+    """Ищет фото через DuckDuckGo Images (без ключей, работает сразу)"""
+    try:
+        # Шаг 1: получаем vqd-токен для поиска
+        encoded_q = urllib.parse.quote(query)
+        url1 = f"https://duckduckgo.com/?q={encoded_q}&iax=images&ia=images"
+        req1 = urllib.request.Request(url1, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+        })
+        with urllib.request.urlopen(req1, timeout=10) as r:
+            html = r.read().decode('utf-8')
+        import re
+        m = re.search(r'vqd=([^&\'"]+)', html)
+        if not m:
+            return None
+        vqd = m.group(1)
+
+        # Шаг 2: запрашиваем результаты поиска картинок
+        params = urllib.parse.urlencode({
+            'l': 'ru-ru', 'o': 'json', 'q': query,
+            'vqd': vqd, 'f': ',,,,,', 'p': '1'
+        })
+        url2 = f"https://duckduckgo.com/i.js?{params}"
+        req2 = urllib.request.Request(url2, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+            'Referer': 'https://duckduckgo.com/',
+            'Accept': 'application/json',
+        })
+        with urllib.request.urlopen(req2, timeout=10) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        results = data.get('results', [])
+        for item in results[:5]:
+            img = item.get('image', '')
+            if img and img.startswith('http') and not img.endswith('.svg'):
+                print(f'[search-image] duckduckgo: {img}')
+                return img
+    except Exception as e:
+        print(f'[search-image] duckduckgo error: {e}')
+    return None
+
+
+def search_via_openverse(query: str) -> str | None:
+    """Ищет фото через Openverse (открытая база фото, без ключей)"""
     try:
         encoded = urllib.parse.quote(query)
-        url = f"https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch={encoded}&srnamespace=6&srlimit=5&format=json"
-        req = urllib.request.Request(url, headers={'User-Agent': 'ProductImageBot/1.0'})
+        url = f"https://api.openverse.org/v1/images/?q={encoded}&page_size=5&license_type=commercial"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'ProductImageBot/1.0',
+            'Accept': 'application/json',
+        })
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode('utf-8'))
-        results = data.get('query', {}).get('search', [])
+        results = data.get('results', [])
         for item in results:
-            title = item.get('title', '')
-            if title:
-                # Получаем прямую ссылку на файл
-                file_encoded = urllib.parse.quote(title)
-                url2 = f"https://commons.wikimedia.org/w/api.php?action=query&titles={file_encoded}&prop=imageinfo&iiprop=url&format=json"
-                req2 = urllib.request.Request(url2, headers={'User-Agent': 'ProductImageBot/1.0'})
-                with urllib.request.urlopen(req2, timeout=8) as r2:
-                    data2 = json.loads(r2.read().decode('utf-8'))
-                pages = data2.get('query', {}).get('pages', {})
-                for page in pages.values():
-                    img_url = page.get('imageinfo', [{}])[0].get('url', '')
-                    if img_url and img_url.startswith('http'):
-                        print(f'[search-image] wikimedia: {img_url}')
-                        return img_url
+            img = item.get('url', '')
+            if img and img.startswith('http'):
+                print(f'[search-image] openverse: {img}')
+                return img
     except Exception as e:
-        print(f'[search-image] wikimedia error: {e}')
+        print(f'[search-image] openverse error: {e}')
     return None
 
 
@@ -148,27 +183,30 @@ def generate_product_image_pollinations(name: str, article: str) -> str | None:
 
 
 def search_product_image(article: str, name: str) -> str | None:
-    """Ищет фото товара: сначала Google CSE (если есть ключ), затем Wikimedia, затем генерирует через AI"""
+    """Ищет фото товара: Google CSE → DuckDuckGo → Openverse → AI-генерация"""
     import os
 
     google_key = os.environ.get('GOOGLE_CSE_KEY', '')
     google_cx = os.environ.get('GOOGLE_CSE_CX', '')
+    search_query = f"{name} {article}".strip() or name or article
 
     # 1. Google Custom Search (если настроен)
     if google_key and google_cx:
-        query = f"{name} {article}".strip() or name or article
-        img = search_via_google_cse(query, google_key, google_cx)
+        img = search_via_google_cse(search_query, google_key, google_cx)
         if img:
             return img
 
-    # 2. Wikimedia Commons — реальные фото товаров/инструментов
-    search_query = (name or article).strip()
-    if search_query:
-        img = search_via_wikimedia(search_query)
-        if img:
-            return img
+    # 2. DuckDuckGo Images — реальные фото из интернета, без ключей
+    img = search_via_duckduckgo(search_query)
+    if img:
+        return img
 
-    # 3. Fallback — AI-генерация точного фото товара
+    # 3. Openverse — открытая база лицензионных фото
+    img = search_via_openverse(search_query)
+    if img:
+        return img
+
+    # 4. Fallback — AI-генерация точного фото товара
     return generate_product_image_pollinations(name, article)
 
 
