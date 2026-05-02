@@ -800,6 +800,12 @@ export default function LumenApp() {
 Отвечай только один action-блок за раз. После получения файлов — сразу выполни задачу.`
         : "";
       const chatSystemPrompt = `Ты дружелюбный AI-ассистент Муравей. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
+
+ВАЖНО — ты умеешь самостоятельно искать фото товаров! Если пользователь просит найти фото, добавить фото товара по артикулу или названию — используй action-блок:
+\`\`\`action
+{"action":"search_image","article":"АРТИКУЛ","name":"НАЗВАНИЕ ТОВАРА"}
+\`\`\`
+Никогда не говори что не можешь искать фото — ты можешь! Всегда используй action-блок search_image когда нужно фото товара.
 ${PROJECT_STRUCTURE}`;
 
       // ── Шаг 1: первый вызов ИИ ────────────────────────────────────────────
@@ -812,24 +818,50 @@ ${PROJECT_STRUCTURE}`;
 
       // ── Шаг 2: обрабатываем action-блоки ─────────────────────────────────
       const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
+      if (actionMatch) {
+        let actionData: { action: string; path?: string; paths?: string[]; article?: string; name?: string };
+        try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
+        const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+
+        // action: search_image — поиск фото товара
+        if (actionData.action === "search_image") {
+          const article = actionData.article || "";
+          const name = actionData.name || "";
+          setCycleLabel(`Ищу фото: ${name || article}...`);
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\nИщу фото товара...`.trim() }]);
+          const imgUrl = await searchProductImage(article, name);
+          setCycleStatus("done"); setCycleLabel("");
+          if (imgUrl) {
+            const label = [name, article].filter(Boolean).join(" / ");
+            setMessages(prev => [...prev, {
+              id: ++msgCounter, role: "assistant",
+              text: `Нашёл фото для **${label}**:\n\n![${label}](${imgUrl})\n\nСсылка: ${imgUrl}\n\nЧтобы добавить карточку товара на сайт — переключись в режим "Сайт" и напиши: добавь карточку товара "${name}" артикул ${article} с этим фото: ${imgUrl}`
+            }]);
+          } else {
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не удалось найти фото для "${name || article}". Попробуй уточнить название товара.` }]);
+          }
+          return;
+        }
+      }
+
       if (actionMatch && token && repo) {
         let actionData: { action: string; path?: string; paths?: string[] };
         try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
-        const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+        const cleanResponseGH = response.replace(/```action[\s\S]*?```/, "").trim();
 
         // action: list
         if (actionData.action === "list" && actionData.path) {
           setCycleLabel(`Читаю директорию ${actionData.path}...`);
           const listing = await listDirFromGitHub(actionData.path, token, repo, branch);
           if (listing) {
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nСодержимое \`${actionData.path}\`:\n\`\`\`\n${listing}\n\`\`\``.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nСодержимое \`${actionData.path}\`:\n\`\`\`\n${listing}\n\`\`\``.trim() }]);
             setCycleLabel("Анализирую список...");
             const response2 = await callAI(chatSystemPrompt, `Директория ${actionData.path}:\n${listing}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           } else {
             setCycleStatus("error"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать директорию \`${actionData.path}\`.`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nНе удалось прочитать директорию \`${actionData.path}\`.`.trim() }]);
           }
           return;
         }
@@ -852,7 +884,7 @@ ${PROJECT_STRUCTURE}`;
             }
           }
           const errNote = errors.length ? `\n\n${errors.join("\n")}` : "";
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов).${errNote}\nАнализирую...`.trim() }]);
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nПрочитал ${filesContent.length} файл(ов).${errNote}\nАнализирую...`.trim() }]);
           setCycleLabel(`Анализирую ${filesContent.length} файлов...`);
           const response2 = await callAI(chatSystemPrompt, `Файлы:\n\n${filesContent.join("\n\n")}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
           setCycleStatus("done"); setCycleLabel("");
@@ -867,14 +899,14 @@ ${PROJECT_STRUCTURE}`;
           if (result.content !== undefined) {
             const sizeStr = result.content.length < 1024 ? `${result.content.length} байт` : `${(result.content.length / 1024).toFixed(1)} КБ`;
             const truncated = result.content.length > 8000 ? result.content.slice(0, 8000) + "\n... [обрезан]" : result.content;
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nПрочитал \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
             setCycleLabel("Анализирую...");
             const response2 = await callAI(chatSystemPrompt, `Файл \`${actionData.path}\`:\n\`\`\`\n${truncated}\n\`\`\`\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           } else {
             setCycleStatus("error"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ ${result.error}`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\n❌ ${result.error}`.trim() }]);
           }
           return;
         }
