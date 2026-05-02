@@ -593,6 +593,15 @@ export default function LumenApp() {
       ? buildChatHistory(userText)
       : [{ role: "user", content: userText }];
 
+    const MODEL_MAX_TOKENS: Record<string, number> = {
+      "gpt-4o-mini": 16000,
+      "gpt-4o": 16000,
+      "gpt-4-turbo": 16000,
+      "o3-mini": 16000,
+      "o1-mini": 16000,
+    };
+    const maxTokens = MODEL_MAX_TOKENS[settings.model] ?? 32000;
+
     const requestBody = isOpenAI
       ? {
           __provider__: "openai",
@@ -603,14 +612,14 @@ export default function LumenApp() {
             { role: "system", content: systemPrompt },
             ...chatMessages,
           ],
-          max_tokens: 32000,
+          max_tokens: maxTokens,
         }
       : {
           __provider__: "claude",
           __base_url__: baseUrl,
           __api_key__: settings.apiKey.trim(),
           model: settings.model,
-          max_tokens: 32000,
+          max_tokens: maxTokens,
           system: systemPrompt,
           messages: chatMessages,
         };
