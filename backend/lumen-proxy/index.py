@@ -101,45 +101,30 @@ def search_via_google_cse(query: str, api_key: str, cx: str) -> str | None:
     return None
 
 
-def search_via_duckduckgo(query: str) -> str | None:
-    """Ищет фото через DuckDuckGo Images (без ключей, работает сразу)"""
+def search_via_serpapi_yandex(query: str) -> str | None:
+    """Ищет фото через Яндекс Images scraping"""
     try:
-        # Шаг 1: получаем vqd-токен для поиска
-        encoded_q = urllib.parse.quote(query)
-        url1 = f"https://duckduckgo.com/?q={encoded_q}&iax=images&ia=images"
-        req1 = urllib.request.Request(url1, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-        })
-        with urllib.request.urlopen(req1, timeout=10) as r:
-            html = r.read().decode('utf-8')
         import re
-        m = re.search(r'vqd=([^&\'"]+)', html)
-        if not m:
-            return None
-        vqd = m.group(1)
-
-        # Шаг 2: запрашиваем результаты поиска картинок
-        params = urllib.parse.urlencode({
-            'l': 'ru-ru', 'o': 'json', 'q': query,
-            'vqd': vqd, 'f': ',,,,,', 'p': '1'
+        encoded = urllib.parse.quote(query)
+        url = f"https://yandex.ru/images/search?text={encoded}&itype=photo&nomisspell=1"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'ru-RU,ru;q=0.9',
         })
-        url2 = f"https://duckduckgo.com/i.js?{params}"
-        req2 = urllib.request.Request(url2, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-            'Referer': 'https://duckduckgo.com/',
-            'Accept': 'application/json',
-        })
-        with urllib.request.urlopen(req2, timeout=10) as r:
-            data = json.loads(r.read().decode('utf-8'))
-        results = data.get('results', [])
-        for item in results[:5]:
-            img = item.get('image', '')
-            if img and img.startswith('http') and not img.endswith('.svg'):
-                print(f'[search-image] duckduckgo: {img}')
-                return img
+        with urllib.request.urlopen(req, timeout=12) as r:
+            html = r.read().decode('utf-8', errors='ignore')
+        # Ищем JSON с данными картинок в HTML
+        matches = re.findall(r'"url"\s*:\s*"(https?://[^"]+\.(jpg|jpeg|png|webp))"', html)
+        for m in matches[:10]:
+            img_url = m[0]
+            # Фильтруем иконки и мусор
+            if any(skip in img_url for skip in ['favicon', 'logo', 'icon', 'pixel', '1x1', 'yastatic']):
+                continue
+            print(f'[search-image] yandex: {img_url}')
+            return img_url
     except Exception as e:
-        print(f'[search-image] duckduckgo error: {e}')
+        print(f'[search-image] yandex error: {e}')
     return None
 
 
@@ -166,12 +151,20 @@ def search_via_openverse(query: str) -> str | None:
 
 
 def generate_product_image_pollinations(name: str, article: str) -> str | None:
-    """Генерирует реалистичное фото товара через Pollinations.ai"""
+    """Генерирует реалистичное фото товара через Pollinations.ai (FLUX)"""
     try:
         import time
-        # Строим точный промпт с названием товара
-        product_desc = name if name else article
-        query = f"professional product photo {product_desc}, isolated on white background, sharp focus, studio lighting, e-commerce style, high quality, real photo"
+        import re as _re
+        product_desc = (name or article or "tool").strip()
+        # Транслитерируем кириллицу латиницей для лучшего качества Flux
+        cyr_map = {
+            'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z',
+            'и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r',
+            'с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh',
+            'щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
+        }
+        translit = "".join(cyr_map.get(c.lower(), c) for c in product_desc)
+        query = f"professional studio product photo of {translit}, white background, sharp focus, e-commerce style, photorealistic"
         encoded = urllib.parse.quote(query)
         seed = int(time.time()) % 99999
         url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=800&seed={seed}&nologo=true&model=flux"
@@ -196,8 +189,8 @@ def search_product_image(article: str, name: str) -> str | None:
         if img:
             return img
 
-    # 2. DuckDuckGo Images — реальные фото из интернета, без ключей
-    img = search_via_duckduckgo(search_query)
+    # 2. Яндекс Картинки — реальные фото по названию товара
+    img = search_via_serpapi_yandex(search_query)
     if img:
         return img
 

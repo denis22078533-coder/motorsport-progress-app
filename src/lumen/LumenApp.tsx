@@ -709,15 +709,28 @@ export default function LumenApp() {
     const lc = text.toLowerCase();
     const isProductRequest = /карточк|товар|артикул|артикл|номенклатур|позиц|продукт|sku|код товар/i.test(lc);
     if (!isProductRequest) return null;
-    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9\-_.]+)/i)
+
+    // Парсим артикул
+    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9/\-_.]+)/i)
       || text.match(/sku[:\s]*([A-Za-z0-9\-_.]+)/i)
       || text.match(/код[:\s]*([A-Za-z0-9\-_.]+)/i)
       || text.match(/[#№]\s*([A-Za-z0-9\-_.]+)/);
-    const nameMatch = text.match(/назван[иеие]+[:\s]+([^,\n.]+)/i)
-      || text.match(/товар[:\s]+([^,\n.]+)/i)
-      || text.match(/наименован[иеие]+[:\s]+([^,\n.]+)/i);
     const article = articleMatch ? articleMatch[1].trim() : "";
-    const name = nameMatch ? nameMatch[1].trim() : "";
+
+    // Парсим название: берём только первые 4 слова после ключевого слова
+    const trimName = (s: string) => s.trim().split(/\s+/).slice(0, 4).join(" ");
+    const nameMatch = text.match(/наименован[а-яА-Я]*[:\s]+([^,\n]+)/i)
+      || text.match(/назван[а-яА-Я]*[:\s]+([^,\n]+)/i)
+      || text.match(/(?:товар|инструмент|продукт)[:\s«"]+([^,\n"»]+)/i);
+    let name = nameMatch ? trimName(nameMatch[1]) : "";
+
+    // Если название не нашли — пробуем вытащить из контекста рядом с артикулом
+    if (!name && article) {
+      const beforeArticle = text.replace(/артикул[^а-яА-Я]*[A-Za-zА-Яа-я0-9/\-_.]+/i, "").trim();
+      const words = beforeArticle.replace(/[^\wа-яА-ЯёЁ\s]/g, " ").trim().split(/\s+/).filter(w => w.length > 2);
+      name = words.slice(0, 4).join(" ");
+    }
+
     if (!article && !name) return null;
     return { article, name };
   };
