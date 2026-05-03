@@ -80,45 +80,57 @@ ${PROJECT_STRUCTURE}`;
 const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
 ## YOUR ONLY TASK: Output a complete HTML file. Start your response with <!DOCTYPE html> immediately.
 
+## STEP 1 — ANALYZE BUSINESS TYPE (think before generating):
+Before writing HTML, identify the business type and choose the right template approach:
+- 🏪 E-commerce / shop → product grid, cart button, price tags, category filter
+- 🍕 Restaurant / cafe / food → menu sections, food photos, reservation form, atmosphere
+- 💊 Pharmacy / medical → clean white design, product categories, trust indicators
+- 💅 Beauty / spa / wellness → soft colors, service cards, booking form, testimonials
+- 🏋️ Fitness / sports → energetic dark theme, program cards, trainer profiles, CTA
+- 🏗️ Construction / repair → portfolio grid, services, process steps, contacts
+- 💻 IT / SaaS / startup → dark/gradient theme, features, pricing table, integrations
+- 🎓 Education / courses → curriculum, instructor bio, student reviews, enrollment CTA
+- 🏠 Real estate → property listings, map, agent contacts, search filters
+- 🎨 Portfolio / creative → full-screen gallery, minimal nav, contact form
+- 📞 Local service → hero with phone CTA, services, area coverage, reviews
+
 ## DESIGN QUALITY — TOP PRIORITY:
-- Worthy of Awwwards, Dribbble — NEVER generic templates
+- Match design style to business type (pharmacy ≠ nightclub ≠ gym)
 - Bold typography: large hero headings (font-size: 3-5rem), clear visual hierarchy
-- Rich colors: gradients, shadows, accent colors — NEVER plain white/gray
+- Rich colors: use brand-appropriate palette — NEVER generic gray templates
 - Animations: fade-in on scroll (IntersectionObserver), smooth hover transitions
 - Cards: border-radius, box-shadow, hover lift (transform: translateY(-4px))
-- Glassmorphism where fitting: backdrop-filter: blur()
 
-## STRUCTURE (include all relevant sections):
-1. **Nav** — sticky, logo + links + CTA, blur backdrop
-2. **Hero** — full viewport height, bold headline, subheadline, 2 CTA buttons, gradient/image background
-3. **Social proof** — client logos or stats ("500+ клиентов", "10 лет на рынке")
-4. **Services/Features** — 3-6 cards with icons, title, description
-5. **How it works** — numbered steps
-6. **Gallery/Portfolio** — if applicable
-7. **Testimonials** — 2-3 cards with avatar, name, quote
-8. **FAQ** — accordion 4-6 questions
-9. **CTA block** — bold bg, headline, contact form or button
-10. **Footer** — logo, links, contacts, copyright
+## STRUCTURE (adapt sections to business type):
+1. **Nav** — sticky, logo + links + CTA button, blur backdrop
+2. **Hero** — full viewport height, bold headline, subheadline, 2 CTA buttons
+3. **Social proof** — specific numbers ("500+ клиентов", "10 лет на рынке", "★ 4.9")
+4. **Core section** — products/services/menu/portfolio depending on business
+5. **How it works / Process** — 3-4 numbered steps
+6. **Testimonials** — 3 cards with avatar (colored circle + initials), name, city, quote
+7. **FAQ** — accordion, 4-5 questions relevant to this business
+8. **CTA block** — bold background, headline, contact form or phone button
+9. **Footer** — logo, nav links, contacts, social icons, copyright
 
 ## TECHNICAL:
 - Tailwind CSS CDN: <script src="https://cdn.tailwindcss.com"></script>
 - Lucide icons CDN: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-- Google Fonts CDN — pick 1-2 fonts matching brand tone
+- Google Fonts CDN — pick fonts matching brand (e.g. Playfair Display for luxury, Inter for tech)
 - All JS inline in <script> tags, mobile-first responsive
 - Scroll animations via IntersectionObserver
-- Write REAL persuasive copy in Russian — specific, compelling, no lorem ipsum
+- Write REAL persuasive copy in Russian — specific, compelling, NO lorem ipsum
 
 ## IMAGES — CRITICAL RULES (violations break the site):
-- ❌ NEVER use <img> tags with external URLs (unsplash.com, picsum.photos, via.placeholder.com, loremflickr.com, placehold.co, source.unsplash.com, images.unsplash.com, or ANY other external image CDN)
-- ❌ NEVER use src="https://..." for images unless the URL was explicitly provided by the user
-- ✅ For hero backgrounds: use CSS linear-gradient or radial-gradient backgrounds
-- ✅ For product/menu cards without photo: use a div with gradient background + emoji or icon centered inside
-- ✅ For team/avatar photos: use colored circle div with initials (e.g. <div style="background:#e67e22;width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.5rem;font-weight:bold">АИ</div>)
-- ✅ For gallery without photos: use gradient cards with relevant emoji and text
-- ✅ If user provided image URLs in their message — use those exact URLs
+- ❌ NEVER use <img> with external URLs (unsplash.com, picsum.photos, via.placeholder.com, loremflickr.com, placehold.co, or ANY image CDN)
+- ❌ NEVER invent src="https://..." unless URL was explicitly provided in this message
+- ✅ If "URL картинки N: https://..." provided in message — use that EXACT URL as <img src="...">
+- ✅ For hero with provided URL: <img src="[URL]" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.5">
+- ✅ For product/service cards without photo: colored gradient div + relevant emoji (font-size:3rem)
+- ✅ For team avatars: colored circle with initials
+- ✅ For gallery without photos: gradient cards with emoji + label
 
-Example product card without photo:
-<div style="background:linear-gradient(135deg,#2c1810,#5c3317);height:200px;display:flex;align-items:center;justify-content:center;font-size:3rem">☕</div>`;
+Example product card (no photo):
+<div style="background:linear-gradient(135deg,#2c1810,#5c3317);height:200px;display:flex;align-items:center;justify-content:center;font-size:3rem;border-radius:12px">☕</div>`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
@@ -1369,17 +1381,21 @@ ${PROJECT_STRUCTURE}`;
         }
       }
 
-      // ── Шаг 1.6: генерируем картинки если нужны ──────────────────────────
-      // Генерируем AI-картинки только для новых сайтов (нет currentHtml) и не для товаров (у них уже есть поиск)
-      const wantsImages = !productInfo && !currentHtml && /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|блюд|еда|ресторан|кафе|кофейн|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
+      // ── Шаг 1.6: генерируем картинки для любого нового сайта ────────────
+      // Всегда генерируем для новых сайтов (нет currentHtml), кроме случаев когда уже нашли фото товара
+      const wantsImages = !productInfo && !currentHtml;
       if (wantsImages) {
         setCycleStatus("generating");
         setCycleLabel("Генерирую картинки...");
         const imgPromptsRaw = await callAI(
-          `Пользователь просит создать сайт. Определи какие картинки нужны и придумай 2-3 коротких описания на английском языке для генерации изображений через AI.
-Правила: описания должны точно соответствовать теме сайта, быть визуально красивыми, фотореалистичными.
-Верни ТОЛЬКО JSON массив строк, например: ["modern gym interior with equipment", "fitness trainer with client"].
-Без пояснений, только JSON.`,
+          `Пользователь просит создать сайт. Тебе нужно придумать 2 коротких описания на английском языке для генерации фотореалистичных изображений через AI.
+Правила:
+- Описания должны точно соответствовать теме и типу бизнеса
+- Первое — широкий баннер/обложка сайта (hero image)
+- Второе — атмосферное фото продукта/услуги/интерьера
+- Стиль: professional photography, bright, high quality, no text
+- Верни ТОЛЬКО JSON массив из 2 строк. Без пояснений, только JSON.
+Примеры: ["modern pharmacy interior with shelves of medicine, bright lighting", "various pills and vitamins on white background, professional photo"]`,
           text
         );
         let imgPrompts: string[] = [];
@@ -1390,31 +1406,35 @@ ${PROJECT_STRUCTURE}`;
 
         if (imgPrompts.length > 0) {
           const generatedUrls: string[] = [];
-          for (let i = 0; i < imgPrompts.length; i++) {
-            if (abortRef.current) return;
-            setCycleLabel(`Генерирую картинку ${i + 1}/${imgPrompts.length}...`);
-            try {
+          // Запускаем генерацию параллельно для скорости
+          const results = await Promise.allSettled(
+            imgPrompts.slice(0, 2).map(async (prompt) => {
               const r = await fetch(IMAGE_GENERATE_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: imgPrompts[i] }),
+                body: JSON.stringify({ prompt }),
               });
               const d = await r.json();
-              if (d.url) generatedUrls.push(d.url);
-            } catch { /* продолжаем без этой картинки */ }
+              return d.url as string | undefined;
+            })
+          );
+          for (const result of results) {
+            if (result.status === "fulfilled" && result.value) {
+              generatedUrls.push(result.value);
+            }
           }
           if (generatedUrls.length > 0) {
             const urlList = generatedUrls.map((u, i) => `URL картинки ${i + 1}: ${u}`).join("\n");
             enrichedText = `${text}
 
-ВАЖНО: Я уже сгенерировал специальные картинки для этого сайта. ОБЯЗАТЕЛЬНО используй их в дизайне:
+ВАЖНО: Я уже сгенерировал специальные картинки для этого сайта. ОБЯЗАТЕЛЬНО используй их:
 ${urlList}
 
-Требования к использованию картинок:
-- Первая картинка — главный баннер/герой секция на всю ширину (object-fit: cover, height: 400-500px)
-- Остальные картинки — в галерее, карточках или секциях сайта
-- Все <img> должны иметь style="object-fit: cover" и заданные размеры
-- НЕ используй placeholder-картинки — только переданные URL`;
+Правила использования картинок:
+- URL картинки 1 — главный hero-баннер на всю ширину (object-fit: cover, height: 450-550px)
+- URL картинки 2 — в секции услуг, продуктов или "О нас" (object-fit: cover)
+- Каждый <img> ОБЯЗАТЕЛЬНО: src="[URL]" style="width:100%;height:100%;object-fit:cover;display:block"
+- НЕ используй никаких других изображений — только эти URL`;
           }
         }
       }
