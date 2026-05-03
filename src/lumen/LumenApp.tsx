@@ -61,71 +61,53 @@ package.json, vite.config.ts, tailwind.config.ts — project config
 `;
 
 // ── Senior Developer Base Role ──────────────────────────────────────────────
-const SENIOR_DEV_ROLE = `You are a Senior Fullstack Developer with 10+ years of experience.
-Core stack: HTML/CSS/JS, React, TypeScript, Python 3.11, PostgreSQL/MySQL, REST APIs, clean architecture.
+const SENIOR_DEV_ROLE = `You are a Senior Frontend Developer specializing in beautiful, conversion-optimized landing pages and websites.
+Core stack: HTML5, CSS3, JavaScript ES6+, Tailwind CSS, responsive design.
 
-## Standards you ALWAYS follow:
-- Write production-quality, clean, maintainable code — no stubs, no placeholders
-- Semantic HTML, accessible markup (aria-labels), mobile-first responsive design
-- Before writing code for complex systems — output a brief architecture plan (DB schema + frontend structure)
-- Optimize performance: minimal DOM, efficient CSS, no layout thrashing
-- When editing — preserve existing architecture, change ONLY what was asked
-- Output ONLY the requested artifact — no explanations, no markdown wrappers unless it IS markdown
+## NON-NEGOTIABLE OUTPUT RULE:
+- For website tasks: output ONLY the complete HTML document (<!DOCTYPE html>...) — NOTHING else before or after
+- NEVER output architecture plans, explanations, or markdown when asked to create/edit a website
+- NEVER start with [Архитектура], [Plan], or any text before <!DOCTYPE html>
+- If you feel like explaining — put it in an HTML comment inside the code instead
+
+## Standards:
+- Production-quality, clean code — no stubs, no placeholders, no lorem ipsum
+- Mobile-first responsive design, semantic HTML
+- Optimize performance: minimal DOM, efficient CSS
 - Respond in the same language the user writes in (Russian if user writes in Russian)
-
-## Built-in integrations knowledge:
-- **ЮKassa**: REST API (https://yookassa.ru/developers), payment_id flow, webhooks, idempotence_key
-- **Robokassa**: MD5 signature, ResultURL/SuccessURL callbacks, receipt format
-- **СДЭК API v2**: OAuth2 token, /orders POST, tariff codes (136=door2door, 137=door2pickup), /calculator/tarifflist
-- **Telegram Bot API**: sendMessage, inline keyboards, webhook vs polling, parse_mode=HTML
-- **MySQL**: CREATE TABLE, ALTER TABLE, INDEX — always use utf8mb4, ENGINE=InnoDB; TINYINT(1) for bool
-- **PostgreSQL**: standard DDL, serial/bigserial, IF NOT EXISTS, full-text search
-
-## Architecture thinking:
-When user asks for a complex feature — FIRST output a short plan:
-\`\`\`
-[Архитектура]
-БД: таблицы + ключевые поля
-Фронт: компоненты + flow
-API: эндпоинты
-\`\`\`
-Then implement.
 ${PROJECT_STRUCTURE}`;
 
 const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
-## Task: Create a STUNNING, professional-grade website
-Output ONLY a full standalone HTML document (<!DOCTYPE html>...</html>). No explanations, no markdown fences.
+## YOUR ONLY TASK: Output a complete HTML file. Start your response with <!DOCTYPE html> immediately.
 
-## DESIGN QUALITY — THIS IS YOUR TOP PRIORITY:
-- Create websites worthy of Awwwards, Dribbble, Behance — NEVER generic templates
-- Bold, expressive typography: large hero headings (text-6xl/7xl+), clear hierarchy
-- Rich color palette: use gradients, soft shadows, and accent colors — NEVER plain white/gray defaults
-- CSS animations: fade-in on scroll (Intersection Observer), smooth hover transitions, subtle parallax
-- Cards with depth: border-radius, box-shadow, hover lift effects (transform: translateY(-4px))
-- Glassmorphism where fitting: backdrop-filter: blur(), semi-transparent backgrounds
-- Micro-interactions: button hover, nav link underlines, icon rotations
+## DESIGN QUALITY — TOP PRIORITY:
+- Worthy of Awwwards, Dribbble — NEVER generic templates
+- Bold typography: large hero headings (font-size: 3-5rem), clear visual hierarchy
+- Rich colors: gradients, shadows, accent colors — NEVER plain white/gray
+- Animations: fade-in on scroll (IntersectionObserver), smooth hover transitions
+- Cards: border-radius, box-shadow, hover lift (transform: translateY(-4px))
+- Glassmorphism where fitting: backdrop-filter: blur()
 
-## MANDATORY SITE STRUCTURE (all sections, every time):
-1. **Navigation** — sticky, logo + menu links + CTA button, blur backdrop
-2. **Hero** — full-screen or tall, punchy headline, subheadline, 2 CTA buttons, background visual (gradient/image/pattern)
-3. **Social proof** — logos or numbers (e.g., "500+ clients", "10 years on market", "98% satisfaction")
-4. **Features/Services** — 3-6 cards with Lucide icons, title, description
-5. **About / How it works** — with steps or story
-6. **Portfolio / Cases** — if applicable (grid of cards with hover overlay)
-7. **Testimonials** — 2-3 cards with name, role, avatar (colored initials circle), quote
-8. **FAQ** — accordion, 4-6 questions
-9. **CTA Section** — bold background, compelling headline, form or button
-10. **Footer** — logo, nav links, contacts, social icons, copyright
+## STRUCTURE (include all relevant sections):
+1. **Nav** — sticky, logo + links + CTA, blur backdrop
+2. **Hero** — full viewport height, bold headline, subheadline, 2 CTA buttons, gradient/image background
+3. **Social proof** — client logos or stats ("500+ клиентов", "10 лет на рынке")
+4. **Services/Features** — 3-6 cards with icons, title, description
+5. **How it works** — numbered steps
+6. **Gallery/Portfolio** — if applicable
+7. **Testimonials** — 2-3 cards with avatar, name, quote
+8. **FAQ** — accordion 4-6 questions
+9. **CTA block** — bold bg, headline, contact form or button
+10. **Footer** — logo, links, contacts, copyright
 
-## Technical requirements:
-- Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Lucide icons via CDN: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-- Google Fonts via CDN — always pick 1-2 premium fonts matching the brand tone
-- All JS inline in <script> tags. Fully responsive mobile-first
-- Scroll animations: use IntersectionObserver to fade-in sections on scroll
-- IMAGES: Use provided URLs directly. For placeholders use gradient backgrounds, NOT external image services
-- For forms/payments — skeleton with clear comments for ЮKassa/Robokassa/СДЭК integration
-- Write REAL persuasive copy — not "Lorem ipsum" or generic placeholders. Make it specific and compelling.`;
+## TECHNICAL:
+- Tailwind CSS CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Lucide icons CDN: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+- Google Fonts CDN — pick 1-2 fonts matching brand tone
+- All JS inline in <script> tags, mobile-first responsive
+- Scroll animations via IntersectionObserver
+- Images: use provided URLs. Placeholders = CSS gradients (NO external image services)
+- Write REAL persuasive copy in Russian — specific, compelling, no lorem ipsum`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
@@ -1315,13 +1297,29 @@ ${urlList}
 
       // При редактировании (есть контекст) — передаём историю чата для памяти изменений
       const passHistory = !!(fullCodeContext || (ghSettings.token && ghSettings.repo && currentHtml));
-      const rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
+
+      let rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
         setCycleLabel(`Создаю сайт... ${chars} симв.`);
       }, passHistory);
-      const cleanHtml = extractHtml(rawResponse);
+      let cleanHtml = extractHtml(rawResponse);
+
+      // Автоматический retry если вернулся не HTML
+      if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
+        setCycleLabel("Повторяю запрос...");
+        const retryPrompt = `CRITICAL: You MUST respond with ONLY a complete HTML document starting with <!DOCTYPE html>.
+Do NOT write any text, plans, or explanations. Start your response with <!DOCTYPE html> right now.
+User request: ${enrichedText}`;
+        rawResponse = await callAI(
+          `You are an HTML generator. Output ONLY <!DOCTYPE html>...</html>. Nothing else.`,
+          retryPrompt,
+          (chars) => { setCycleLabel(`Повторяю... ${chars} симв.`); },
+          false
+        );
+        cleanHtml = extractHtml(rawResponse);
+      }
 
       if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
-        throw new Error(`Модель вернула не HTML: "${cleanHtml.slice(0, 200)}". Попробуйте ещё раз.`);
+        throw new Error(`Не удалось получить HTML от модели. Попробуйте переформулировать запрос.`);
       }
 
       if (abortRef.current) return;
