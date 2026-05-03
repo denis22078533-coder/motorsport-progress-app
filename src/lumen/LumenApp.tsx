@@ -1556,34 +1556,9 @@ ${PROJECT_STRUCTURE}`;
 
       if (abortRef.current) { antThinkClear(); return; }
 
-      // ── Шаг 1.5: поиск фото товара по артикулу / названию ────────────────
+      // ── Шаг 1.5: генерируем картинки для нового сайта ────────────────────
       let enrichedText = text;
-      const productInfo = detectProductRequest(text);
-      if (productInfo) {
-        antThink(`🔍 Ищу фото товара: ${productInfo.name || productInfo.article}...`);
-        setCycleLabel("Ищу фото товара...");
-        const productImgUrl = await searchProductImage(productInfo.article, productInfo.name);
-        if (productImgUrl) {
-          antThink(`🖼️ Нашёл фото товара! Добавляю в задание...`);
-          enrichedText = `${text}
-
-НАЙДЕНО РЕАЛЬНОЕ ФОТО ТОВАРА из интернета — используй именно этот URL:
-Фото: ${productImgUrl}
-Артикул: ${productInfo.article || "не указан"}
-Название: ${productInfo.name || "не указано"}
-
-СТРОГИЕ ПРАВИЛА:
-- Используй ТОЛЬКО этот URL фото: ${productImgUrl}
-- НЕ генерируй и НЕ придумывай другие картинки
-- Добавь карточку товара: фото (object-fit: cover), название, артикул, кнопка "В корзину"
-- НЕ меняй остальные части сайта — только добавь карточку товара`;
-        } else {
-          antThink(`⚠️ Фото не нашёл — создам карточку товара с заглушкой.`);
-        }
-      }
-
-      // ── Шаг 1.6: генерируем картинки для нового сайта ────────────────────
-      const wantsImages = !productInfo && !currentHtml;
+      const wantsImages = !currentHtml;
       if (wantsImages) {
         antThink(`🎨 Генерирую изображения для ${analysis.businessType}...`);
         setCycleLabel("Генерирую картинки...");
