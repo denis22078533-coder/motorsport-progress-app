@@ -5,24 +5,6 @@
       "method": "OPTIONS",
       "path": "/",
       "expectedStatus": 200
-    },
-    {
-      "name": "Search product image by article and name",
-      "method": "POST",
-      "path": "/",
-      "body": {"__action__": "search_image", "article": "73/6/8/8", "name": "Молоток Вихрь"},
-      "expectedStatus": 200,
-      "expectedBody": {"url": "string"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Web search",
-      "method": "POST",
-      "path": "/",
-      "body": {"__action__": "web_search", "query": "погода в Москве сегодня"},
-      "expectedStatus": 200,
-      "expectedBody": {"results": []},
-      "bodyMatcher": "partial"
     }
   ]
 }

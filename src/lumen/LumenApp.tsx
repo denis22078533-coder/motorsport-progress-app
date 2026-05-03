@@ -19,7 +19,7 @@ type MobileTab = "chat" | "preview";
 
 export interface Message {
   id: number;
-  role: "user" | "assistant" | "ant-thinking";
+  role: "user" | "assistant";
   text: string;
   html?: string; // HTML-результат, который можно задеплоить
 }
@@ -61,97 +61,84 @@ package.json, vite.config.ts, tailwind.config.ts — project config
 `;
 
 // ── Senior Developer Base Role ──────────────────────────────────────────────
-const SENIOR_DEV_ROLE = `You are a Senior Frontend Developer specializing in beautiful, conversion-optimized landing pages and websites.
-Core stack: HTML5, CSS3, JavaScript ES6+, Tailwind CSS, responsive design.
+const SENIOR_DEV_ROLE = `You are a Senior Fullstack Developer with 10+ years of experience.
+Core stack: HTML/CSS/JS, React, TypeScript, Python 3.11, PostgreSQL/MySQL, REST APIs, clean architecture.
 
-## NON-NEGOTIABLE OUTPUT RULE:
-- For website tasks: output ONLY the complete HTML document (<!DOCTYPE html>...) — NOTHING else before or after
-- NEVER output architecture plans, explanations, or markdown when asked to create/edit a website
-- NEVER start with [Архитектура], [Plan], or any text before <!DOCTYPE html>
-- If you feel like explaining — put it in an HTML comment inside the code instead
-
-## Standards:
-- Production-quality, clean code — no stubs, no placeholders, no lorem ipsum
-- Mobile-first responsive design, semantic HTML
-- Optimize performance: minimal DOM, efficient CSS
+## Standards you ALWAYS follow:
+- Write production-quality, clean, maintainable code — no stubs, no placeholders
+- Semantic HTML, accessible markup (aria-labels), mobile-first responsive design
+- Before writing code for complex systems — output a brief architecture plan (DB schema + frontend structure)
+- Optimize performance: minimal DOM, efficient CSS, no layout thrashing
+- When editing — preserve existing architecture, change ONLY what was asked
+- Output ONLY the requested artifact — no explanations, no markdown wrappers unless it IS markdown
 - Respond in the same language the user writes in (Russian if user writes in Russian)
+
+## Built-in integrations knowledge:
+- **ЮKassa**: REST API (https://yookassa.ru/developers), payment_id flow, webhooks, idempotence_key
+- **Robokassa**: MD5 signature, ResultURL/SuccessURL callbacks, receipt format
+- **СДЭК API v2**: OAuth2 token, /orders POST, tariff codes (136=door2door, 137=door2pickup), /calculator/tarifflist
+- **Telegram Bot API**: sendMessage, inline keyboards, webhook vs polling, parse_mode=HTML
+- **MySQL**: CREATE TABLE, ALTER TABLE, INDEX — always use utf8mb4, ENGINE=InnoDB; TINYINT(1) for bool
+- **PostgreSQL**: standard DDL, serial/bigserial, IF NOT EXISTS, full-text search
+
+## Architecture thinking:
+When user asks for a complex feature — FIRST output a short plan:
+\`\`\`
+[Архитектура]
+БД: таблицы + ключевые поля
+Фронт: компоненты + flow
+API: эндпоинты
+\`\`\`
+Then implement.
 ${PROJECT_STRUCTURE}`;
 
 const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
-## YOUR ONLY TASK: Output a complete HTML file. Start your response with <!DOCTYPE html> immediately.
+## Task: Create a STUNNING, professional-grade website
+Output ONLY a full standalone HTML document (<!DOCTYPE html>...</html>). No explanations, no markdown fences.
 
-## STEP 1 — ANALYZE BUSINESS TYPE (think before generating):
-Before writing HTML, identify the business type and choose the right template approach:
-- 🏪 E-commerce / shop → product grid, cart button, price tags, category filter
-- 🍕 Restaurant / cafe / food → menu sections, food photos, reservation form, atmosphere
-- 💊 Pharmacy / medical → clean white design, product categories, trust indicators
-- 💅 Beauty / spa / wellness → soft colors, service cards, booking form, testimonials
-- 🏋️ Fitness / sports → energetic dark theme, program cards, trainer profiles, CTA
-- 🏗️ Construction / repair → portfolio grid, services, process steps, contacts
-- 💻 IT / SaaS / startup → dark/gradient theme, features, pricing table, integrations
-- 🎓 Education / courses → curriculum, instructor bio, student reviews, enrollment CTA
-- 🏠 Real estate → property listings, map, agent contacts, search filters
-- 🎨 Portfolio / creative → full-screen gallery, minimal nav, contact form
-- 📞 Local service → hero with phone CTA, services, area coverage, reviews
+## DESIGN QUALITY — THIS IS YOUR TOP PRIORITY:
+- Create websites worthy of Awwwards, Dribbble, Behance — NEVER generic templates
+- Bold, expressive typography: large hero headings (text-6xl/7xl+), clear hierarchy
+- Rich color palette: use gradients, soft shadows, and accent colors — NEVER plain white/gray defaults
+- CSS animations: fade-in on scroll (Intersection Observer), smooth hover transitions, subtle parallax
+- Cards with depth: border-radius, box-shadow, hover lift effects (transform: translateY(-4px))
+- Glassmorphism where fitting: backdrop-filter: blur(), semi-transparent backgrounds
+- Micro-interactions: button hover, nav link underlines, icon rotations
 
-## DESIGN QUALITY — TOP PRIORITY:
-- Match design style to business type (pharmacy ≠ nightclub ≠ gym)
-- Bold typography: large hero headings (font-size: 3-5rem), clear visual hierarchy
-- Rich colors: use brand-appropriate palette — NEVER generic gray templates
-- Animations: fade-in on scroll (IntersectionObserver), smooth hover transitions
-- Cards: border-radius, box-shadow, hover lift (transform: translateY(-4px))
+## MANDATORY SITE STRUCTURE (all sections, every time):
+1. **Navigation** — sticky, logo + menu links + CTA button, blur backdrop
+2. **Hero** — full-screen or tall, punchy headline, subheadline, 2 CTA buttons, background visual (gradient/image/pattern)
+3. **Social proof** — logos or numbers (e.g., "500+ clients", "10 years on market", "98% satisfaction")
+4. **Features/Services** — 3-6 cards with Lucide icons, title, description
+5. **About / How it works** — with steps or story
+6. **Portfolio / Cases** — if applicable (grid of cards with hover overlay)
+7. **Testimonials** — 2-3 cards with name, role, avatar (colored initials circle), quote
+8. **FAQ** — accordion, 4-6 questions
+9. **CTA Section** — bold background, compelling headline, form or button
+10. **Footer** — logo, nav links, contacts, social icons, copyright
 
-## STRUCTURE (adapt sections to business type):
-1. **Nav** — sticky, logo + links + CTA button, blur backdrop
-2. **Hero** — full viewport height, bold headline, subheadline, 2 CTA buttons
-3. **Social proof** — specific numbers ("500+ клиентов", "10 лет на рынке", "★ 4.9")
-4. **Core section** — products/services/menu/portfolio depending on business
-5. **How it works / Process** — 3-4 numbered steps
-6. **Testimonials** — 3 cards with avatar (colored circle + initials), name, city, quote
-7. **FAQ** — accordion, 4-5 questions relevant to this business
-8. **CTA block** — bold background, headline, contact form or phone button
-9. **Footer** — logo, nav links, contacts, social icons, copyright
-
-## TECHNICAL:
-- Tailwind CSS CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Lucide icons CDN: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-- Google Fonts CDN — pick fonts matching brand (e.g. Playfair Display for luxury, Inter for tech)
-- All JS inline in <script> tags, mobile-first responsive
-- Scroll animations via IntersectionObserver
-- Write REAL persuasive copy in Russian — specific, compelling, NO lorem ipsum
-
-## IMAGES — CRITICAL RULES (violations break the site):
-- ❌ NEVER use <img> with external URLs (unsplash.com, picsum.photos, via.placeholder.com, loremflickr.com, placehold.co, or ANY image CDN)
-- ❌ NEVER invent src="https://..." unless URL was explicitly provided in this message
-- ✅ If "URL картинки N: https://..." provided in message — use that EXACT URL as <img src="...">
-- ✅ For hero with provided URL: <img src="[URL]" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.5">
-- ✅ For product/service cards without photo: colored gradient div + relevant emoji (font-size:3rem)
-- ✅ For team avatars: colored circle with initials
-- ✅ For gallery without photos: gradient cards with emoji + label
-
-Example product card (no photo):
-<div style="background:linear-gradient(135deg,#2c1810,#5c3317);height:200px;display:flex;align-items:center;justify-content:center;font-size:3rem;border-radius:12px">☕</div>`;
+## Technical requirements:
+- Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Lucide icons via CDN: <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+- Google Fonts via CDN — always pick 1-2 premium fonts matching the brand tone
+- All JS inline in <script> tags. Fully responsive mobile-first
+- Scroll animations: use IntersectionObserver to fade-in sections on scroll
+- IMAGES: Use provided URLs directly. For placeholders use gradient backgrounds, NOT external image services
+- For forms/payments — skeleton with clear comments for ЮKassa/Robokassa/СДЭК integration
+- Write REAL persuasive copy — not "Lorem ipsum" or generic placeholders. Make it specific and compelling.`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
 ## Task: Edit existing website code
 Output ONLY the complete modified HTML document. No explanations, no markdown.
+Rules:
+- Make EXACTLY the requested changes, nothing more
+- Preserve all existing styles, structure, content that was NOT mentioned
+- Keep the same framework/library versions already in the code
 
-## КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА — НАРУШЕНИЕ НЕДОПУСТИМО:
-- ❌ ЗАПРЕЩЕНО пересоздавать сайт заново — это РЕДАКТИРОВАНИЕ, не создание
-- ❌ ЗАПРЕЩЕНО менять дизайн, цвета, шрифты, структуру если не просили
-- ❌ ЗАПРЕЩЕНО добавлять секции которые не просили (FAQ, отзывы, footer и т.д.)
-- ❌ ЗАПРЕЩЕНО менять существующий контент который не упомянут в запросе
-- ✅ Сделай ТОЛЬКО то что попросили — одно конкретное изменение
-- ✅ Все остальные части сайта оставь ТОЧНО как есть
-- ✅ Если просят добавить товар — добавь только карточку товара в нужное место
-- ✅ Если найдено фото товара — используй ИМЕННО этот URL, не придумывай другое
-- ❌ ЗАПРЕЩЕНО вставлять <img> с внешними URL (unsplash, picsum, placeholder, placehold.co и т.д.) — они не работают
-- ✅ Вместо изображений без URL — CSS градиент + emoji/иконка
-
---- ТЕКУЩИЙ КОД САЙТА (редактируй только нужные части) ---
+--- CURRENT SITE CODE ---
 ${currentHtml}
---- КОНЕЦ КОДА ---`;
+--- END OF CODE ---`;
 
 const ZIP_CONVERT_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
 ## Task: Convert React/Vite project to single HTML file
@@ -251,33 +238,9 @@ export default function LumenApp() {
     return user && repo ? `https://${user}.github.io/${repo}/` : "";
   })();
 
-  const [cycleStatus, setCycleStatusRaw] = useState<CycleStatus>("idle");
-  const setCycleStatus = (s: CycleStatus) => { cycleStatusRef.current = s; setCycleStatusRaw(s); };
+  const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
-  const [messages, setMessages] = useState<Message[]>(() => {
-    try {
-      const saved = localStorage.getItem("lumen_chat_history");
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-
-  // Память Муравья о пользователе
-  const [userMemory, setUserMemory] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem("lumen_user_memory");
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
-  const saveMemory = (newFacts: Record<string, string>) => {
-    const merged = { ...userMemory, ...newFacts };
-    setUserMemory(merged);
-    localStorage.setItem("lumen_user_memory", JSON.stringify(merged));
-  };
-  const getMemoryContext = () => {
-    const entries = Object.entries(userMemory);
-    if (!entries.length) return "";
-    return "\n\n## Что я знаю о пользователе:\n" + entries.map(([k, v]) => `- ${k}: ${v}`).join("\n");
-  };
+  const [messages, setMessages] = useState<Message[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [htmlHistory, setHtmlHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -318,14 +281,6 @@ export default function LumenApp() {
     }]);
   };
 
-  // Автосохранение истории чата (макс. 100 последних сообщений, без временных мыслей)
-  useEffect(() => {
-    try {
-      const toSave = messages.filter(m => m.role !== "ant-thinking").slice(-100);
-      localStorage.setItem("lumen_chat_history", JSON.stringify(toSave));
-    } catch { /* ignore */ }
-  }, [messages]);
-
   // Sync Engine — скачать исходники платформы
   const [syncingEngine, setSyncingEngine] = useState(false);
   const handleSyncEngine = useCallback(async () => {
@@ -348,7 +303,6 @@ export default function LumenApp() {
 
   // Сохраняем HTML в localStorage при каждом изменении
   const savePreviewHtml = (html: string | null) => {
-    previewHtmlRef.current = html;
     setPreviewHtml(prev => {
       if (prev) setHtmlHistory(h => [...h.slice(-9), prev]); // храним до 10 версий
       return html;
@@ -379,9 +333,6 @@ export default function LumenApp() {
   const abortRef = useRef(false);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const [convertingZip, setConvertingZip] = useState(false);
-  const autoFixingRef = useRef(false);
-  const previewHtmlRef = useRef<string | null>(null);
-  const cycleStatusRef = useRef<CycleStatus>("idle");
 
   // Загружаем JSZip через CDN один раз
   useEffect(() => {
@@ -585,69 +536,18 @@ export default function LumenApp() {
     return tagMatch ? tagMatch[1].trim() : raw.trim();
   };
 
-  // Замена битых <img> на красивые CSS-плейсхолдеры с эмодзи
-  const fixBrokenImages = (html: string): string => {
-    const BLOCKED = /unsplash\.com|picsum\.photos|via\.placeholder\.com|placehold\.co|loremflickr\.com|source\.unsplash|images\.unsplash|placeholder\.com|dummyimage\.com|placekitten\.com|fakeimg\.pl/i;
-    // Набор градиентов и эмодзи для разных тематик
-    const PLACEHOLDERS = [
-      { bg: "linear-gradient(135deg,#667eea,#764ba2)", emoji: "🖼" },
-      { bg: "linear-gradient(135deg,#f093fb,#f5576c)", emoji: "📷" },
-      { bg: "linear-gradient(135deg,#4facfe,#00f2fe)", emoji: "🌅" },
-      { bg: "linear-gradient(135deg,#43e97b,#38f9d7)", emoji: "🌿" },
-      { bg: "linear-gradient(135deg,#fa709a,#fee140)", emoji: "✨" },
-      { bg: "linear-gradient(135deg,#a18cd1,#fbc2eb)", emoji: "💊" },
-      { bg: "linear-gradient(135deg,#ffecd2,#fcb69f)", emoji: "🛍" },
-      { bg: "linear-gradient(135deg,#2c3e50,#4ca1af)", emoji: "🏢" },
-    ];
-    let idx = 0;
-    return html.replace(/<img([^>]*?)>/gi, (match, attrs) => {
-      const srcMatch = attrs.match(/src=["']([^"']+)["']/i);
-      if (!srcMatch) {
-        // Нет src вообще — заменяем
-      } else {
-        const src = srcMatch[1].trim();
-        // Оставляем data: и blob: — они рабочие
-        if (src.startsWith("data:") || src.startsWith("blob:")) return match;
-        // Оставляем доверенные CDN
-        if (/cdn\.poehali\.dev|githubusercontent\.com|cloudinary\.com/i.test(src)) return match;
-        // Заменяем: заблокированные плейсхолдеры
-        if (BLOCKED.test(src)) { /* fall through — заменить */ }
-        // Заменяем: относительные пути (photo.jpg, /images/x.png, ./img/x) — они всегда битые в превью
-        else if (!src.startsWith("http")) { /* fall through — заменить */ }
-        // Оставляем все остальные внешние http(s) URL
-        else return match;
-      }
-      // Извлекаем alt для эмодзи-подсказки
-      const altMatch = attrs.match(/alt=["']([^"']{1,20})["']/i);
-      const altText = altMatch ? altMatch[1] : "";
-      const classMatch = attrs.match(/class=["']([^"']+)["']/i);
-      const styleMatch = attrs.match(/style=["']([^"']+)["']/i);
-      const p = PLACEHOLDERS[idx++ % PLACEHOLDERS.length];
-      const cls = classMatch ? ` class="${classMatch[1]}"` : "";
-      const extraStyle = styleMatch ? styleMatch[1] : "";
-      return `<div${cls} style="background:${p.bg};display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:160px;border-radius:inherit;${extraStyle}"><span style="font-size:2.5rem">${p.emoji}</span>${altText ? `<span style="color:rgba(255,255,255,0.7);font-size:0.75rem;margin-top:6px;padding:0 8px;text-align:center">${altText}</span>` : ""}</div>`;
-    });
-  };
-
   // Инжектирует принудительный светлый фон если в HTML нет явного светлого background
   const injectLightTheme = (html: string): string => {
-    html = fixBrokenImages(html); // убираем битые изображения до всего остального
     const forceCss = `<style data-lumen-fix>
       html,body{background:#ffffff!important;color:#111111!important;}
-      img:not([src]),img[src=""],img[src^="/"],img[src^="./"],img[src^="../"]{display:none!important;}
     </style>`;
-    // Перехватчик JS-ошибок — отправляет их в родительское окно через postMessage
-    const errorScript = `<script data-lumen-err>
-(function(){var _errs=[];var _t=null;function _flush(){if(_errs.length&&parent!==window){parent.postMessage({type:'lumen-js-errors',errors:_errs.slice()},'*');_errs=[];}}window.onerror=function(msg,src,line,col){_errs.push(String(msg)+(src?' ('+src.split('/').pop()+':'+line+')':''));clearTimeout(_t);_t=setTimeout(_flush,800);return false;};window.addEventListener('unhandledrejection',function(e){_errs.push('Promise: '+String(e.reason));clearTimeout(_t);_t=setTimeout(_flush,800);});})();
-</script>`;
-    const inject = forceCss + errorScript;
     if (/<\/head>/i.test(html)) {
-      return html.replace(/<\/head>/i, `${inject}</head>`);
+      return html.replace(/<\/head>/i, `${forceCss}</head>`);
     }
     if (/<body/i.test(html)) {
-      return html.replace(/<body([^>]*)>/i, `<head>${inject}</head><body$1>`);
+      return html.replace(/<body([^>]*)>/i, `<head>${forceCss}</head><body$1>`);
     }
-    return inject + html;
+    return forceCss + html;
   };
 
   // Инжектирует <base href> в HTML чтобы относительные пути assets/ работали через живой домен
@@ -672,7 +572,7 @@ export default function LumenApp() {
   const buildChatHistory = (currentUserText: string, maxPairs = 8): { role: string; content: string }[] => {
     // Берём последние maxPairs пар (user+assistant) из истории, исключая картинки и длинный HTML
     const history: { role: string; content: string }[] = [];
-    const recent = messages.filter(m => m.role !== "ant-thinking").slice(-maxPairs * 2);
+    const recent = messages.slice(-maxPairs * 2);
     for (const msg of recent) {
       if (msg.html?.startsWith("__IMAGE__:")) continue; // пропускаем картинки
       const content = msg.html
@@ -788,124 +688,7 @@ export default function LumenApp() {
     }
   };
 
-  // ── Авто-исправление JS-ошибок из iframe ─────────────────────────────────
-  useEffect(() => {
-    const handler = async (event: MessageEvent) => {
-      if (
-        !event.data ||
-        event.data.type !== "lumen-js-errors" ||
-        !Array.isArray(event.data.errors) ||
-        event.data.errors.length === 0
-      ) return;
-
-      if (autoFixingRef.current || cycleStatusRef.current === "generating") return;
-
-      const errors: string[] = [...new Set(event.data.errors as string[])].slice(0, 5);
-      const htmlSnapshot = previewHtmlRef.current;
-      if (!htmlSnapshot) return;
-
-      autoFixingRef.current = true;
-      setCycleStatus("generating");
-      setCycleLabel("Нашёл ошибки, исправляю...");
-
-      const errList = errors.map((e, i) => `${i + 1}. ${e}`).join("\n");
-      setMessages(prev => [...prev, {
-        id: ++msgCounter,
-        role: "assistant",
-        text: `Обнаружил ошибки в сайте, исправляю автоматически...\n\`\`\`\n${errList}\n\`\`\``,
-      }]);
-
-      try {
-        const fixedRaw = await callAI(
-          `You are an HTML/JS bug fixer. Output ONLY the complete corrected HTML document starting with <!DOCTYPE html>. No explanations.`,
-          `Fix these JavaScript runtime errors in the HTML page:\n${errList}\n\nFix ONLY these errors, keep everything else exactly as is.\n\n--- CURRENT HTML ---\n${htmlSnapshot.slice(0, 60000)}`,
-          (chars) => { setCycleLabel(`Исправляю... ${chars} симв.`); },
-          false
-        );
-        const fixedHtml = extractHtml(fixedRaw);
-        if (/<[a-z][\s\S]*>/i.test(fixedHtml)) {
-          const htmlWithBase = liveUrl ? injectBaseHref(fixedHtml, liveUrl) : fixedHtml;
-          savePreviewHtml(injectLightTheme(htmlWithBase));
-          setMessages(prev => [...prev, {
-            id: ++msgCounter,
-            role: "assistant",
-            text: "Ошибки исправлены, сайт обновлён.",
-            html: fixedHtml,
-          }]);
-          setCycleStatus("done");
-        } else {
-          setCycleStatus("idle");
-        }
-      } catch {
-        setCycleStatus("idle");
-      } finally {
-        setCycleLabel("");
-        autoFixingRef.current = false;
-      }
-    };
-
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveUrl]);
-
   const IMAGE_GENERATE_URL = "https://functions.poehali.dev/0f178db7-a08a-4911-8f10-5f45a0d585a3";
-  const LUMEN_PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
-
-  const searchProductImage = async (article: string, name: string): Promise<string | null> => {
-    try {
-      const r = await fetch(LUMEN_PROXY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ __action__: "search_image", article, name }),
-      });
-      const d = await r.json();
-      return d.url || null;
-    } catch {
-      return null;
-    }
-  };
-
-  const searchWeb = async (query: string, maxResults = 5): Promise<{ title: string; snippet: string; url: string }[]> => {
-    try {
-      const r = await fetch(LUMEN_PROXY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ __action__: "web_search", query, max_results: maxResults }),
-      });
-      const d = await r.json();
-      return d.results || [];
-    } catch {
-      return [];
-    }
-  };
-
-  const detectProductRequest = (text: string): { article: string; name: string } | null => {
-    const lc = text.toLowerCase();
-    const isProductRequest = /карточк|товар|артикул|артикл|номенклатур|позиц|продукт|sku|код товар/i.test(lc);
-    if (!isProductRequest) return null;
-
-    // Артикул: минимум 2 символа, поддерживаем слэши (73/6/8/8)
-    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9][A-Za-zА-Яа-я0-9\-_./]{1,})/i)
-      || text.match(/sku[:\s]*([A-Za-z0-9][A-Za-z0-9\-_./]{1,})/i)
-      || text.match(/код[:\s]*([A-Za-z0-9][A-Za-z0-9\-_./]{1,})/i)
-      || text.match(/[#№]\s*([A-Za-z0-9][A-Za-z0-9\-_./]{1,})/);
-
-    // Название: слова с заглавной буквы, не менее 3 символов
-    const nameMatch = text.match(/назван[иеие]+[:\s]+([^,\n.]{3,})/i)
-      || text.match(/наименован[иеие]+[:\s]+([^,\n.]{3,})/i)
-      || text.match(/товар[:\s"«]+([А-ЯA-Z][а-яёa-z][^,\n"»]{2,50})/i);
-
-    const article = articleMatch ? articleMatch[1].trim() : "";
-    // Очищаем название от артикула если он туда попал
-    let name = nameMatch ? nameMatch[1].trim() : "";
-    if (article && name.includes(article)) {
-      name = name.replace(article, "").trim().replace(/[-\s]+$/, "").trim();
-    }
-
-    if (!article && !name) return null;
-    return { article, name };
-  };
 
   const handleSendImage = useCallback(async (text: string) => {
     setCycleStatus("generating");
@@ -976,48 +759,15 @@ export default function LumenApp() {
     const branch = ghSettings.branch || "main";
     try {
       const repoInfo = token && repo
-        ? `\n\n## GitHub подключён: ${repo} (ветка: ${branch})
-Можешь читать файлы проекта через action-блоки:
-- Список файлов: \`{"action":"list","path":"src"}\`
-- Один файл: \`{"action":"read","path":"src/App.tsx"}\`
-- Несколько файлов: \`{"action":"read_multiple","paths":["src/App.tsx","src/lumen/LumenApp.tsx"]}\`
-Отвечай только один action-блок за раз.`
+        ? `\n\nПодключён GitHub репозиторий: ${repo} (ветка: ${branch}).
+Доступны action-блоки для работы с файлами:
+- Список файлов в директории: \`{"action":"list","path":"src/lumen"}\`
+- Прочитать один файл: \`{"action":"read","path":"src/App.tsx"}\`
+- Прочитать несколько файлов сразу: \`{"action":"read_multiple","paths":["src/App.tsx","src/lumen/LumenApp.tsx"]}\`
+
+Отвечай только один action-блок за раз. После получения файлов — сразу выполни задачу.`
         : "";
-
-      const memoryCtx = getMemoryContext();
-
-      const chatSystemPrompt = `Ты Муравей — умный AI-ассистент. Ты помогаешь создавать сайты, разбираешься в бизнесе, маркетинге, SEO, продажах и технологиях. Отвечай на русском языке, кратко и по делу.${repoInfo}${memoryCtx}
-
-## ТВОИ ИНСТРУМЕНТЫ (используй action-блоки — НЕ отказывайся!):
-
-### 🔍 Поиск в интернете — когда нужны актуальные данные, цены, новости, факты:
-\`\`\`action
-{"action":"web_search","query":"ПОИСКОВЫЙ ЗАПРОС"}
-\`\`\`
-
-### 🖼 Найти фото товара по названию/артикулу:
-\`\`\`action
-{"action":"search_image","article":"АРТИКУЛ","name":"НАЗВАНИЕ ТОВАРА"}
-\`\`\`
-
-### 🎨 Сгенерировать картинку через AI:
-\`\`\`action
-{"action":"generate_image","prompt":"product photo, white background, professional lighting"}
-\`\`\`
-
-### 💾 Запомнить факт о пользователе:
-\`\`\`action
-{"action":"remember","key":"название бизнеса","value":"Аптека Здоровье"}
-\`\`\`
-
-## ПРАВИЛА ПОВЕДЕНИЯ:
-- НИКОГДА не говори "я не знаю", "я не могу", "у меня нет доступа" — ВСЕГДА используй инструменты
-- Если вопрос о текущих ценах, новостях, погоде, курсах — сразу делай web_search
-- Если просят фото товара — делай search_image (если не найдёт — автоматически сгенерирует)
-- Если узнал важный факт о пользователе (имя, бизнес, город) — запомни через remember
-- Отвечай только один action-блок за раз
-- После получения данных из поиска — дай развёрнутый полезный ответ
-
+      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Муравей. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
 ${PROJECT_STRUCTURE}`;
 
       // ── Шаг 1: первый вызов ИИ ────────────────────────────────────────────
@@ -1030,131 +780,24 @@ ${PROJECT_STRUCTURE}`;
 
       // ── Шаг 2: обрабатываем action-блоки ─────────────────────────────────
       const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
-      if (actionMatch) {
-        let actionData: { action: string; path?: string; paths?: string[]; article?: string; name?: string; prompt?: string; query?: string; key?: string; value?: string };
-        try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
-        const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
-
-        // action: web_search — поиск в интернете
-        if (actionData.action === "web_search") {
-          const query = actionData.query || text;
-          setCycleLabel(`Ищу в интернете: ${query}...`);
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\nИщу в интернете...`.trim() }]);
-          const results = await searchWeb(query);
-          if (results.length > 0) {
-            const searchContext = results.map((r, i) => `${i + 1}. **${r.title}**\n${r.snippet}\n${r.url}`).join("\n\n");
-            setCycleLabel("Анализирую результаты...");
-            const response2 = await callAI(
-              chatSystemPrompt,
-              `Результаты поиска по запросу "${query}":\n\n${searchContext}\n\nНа основе этих данных ответь на вопрос пользователя: ${text}`,
-              (c) => setCycleLabel(`Анализирую... ${c} симв.`),
-              false
-            );
-            setCycleStatus("done"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
-          } else {
-            setCycleStatus("done"); setCycleLabel("");
-            const response2 = await callAI(chatSystemPrompt, text, undefined, true);
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
-          }
-          return;
-        }
-
-        // action: remember — запомнить факт о пользователе
-        if (actionData.action === "remember" && actionData.key && actionData.value) {
-          saveMemory({ [actionData.key]: actionData.value });
-          setCycleStatus("done"); setCycleLabel("");
-          const msg = cleanResponse || `Запомнил: ${actionData.key} — ${actionData.value}`;
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: msg }]);
-          return;
-        }
-
-        // action: search_image — поиск фото товара
-        if (actionData.action === "search_image") {
-          const article = actionData.article || "";
-          const name = actionData.name || "";
-          setCycleLabel(`Ищу фото: ${name || article}...`);
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\nИщу фото товара...`.trim() }]);
-          const imgUrl = await searchProductImage(article, name);
-          setCycleStatus("done"); setCycleLabel("");
-          if (imgUrl) {
-            const label = [name, article].filter(Boolean).join(" / ");
-            setMessages(prev => [...prev, {
-              id: ++msgCounter, role: "assistant",
-              text: `Нашёл фото для **${label}**:\n\n![${label}](${imgUrl})\n\nЧтобы добавить на сайт — напиши: добавь товар "${name}" с фото: ${imgUrl}`
-            }]);
-          } else {
-            // Если поиск не дал результатов — пробуем сгенерировать
-            setCycleLabel(`Генерирую фото: ${name || article}...`);
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не нашёл готовое фото, генерирую через AI...` }]);
-            try {
-              const genPrompt = `${name || article}, product photo, white background, professional, high quality`;
-              const r = await fetch(IMAGE_GENERATE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: genPrompt }) });
-              const d = await r.json();
-              if (d.url) {
-                const label = [name, article].filter(Boolean).join(" / ");
-                setMessages(prev => [...prev, {
-                  id: ++msgCounter, role: "assistant",
-                  text: `Сгенерировал фото для **${label}**:\n\n![${label}](${d.url})\n\nЧтобы добавить на сайт — напиши: добавь товар "${name}" с фото: ${d.url}`
-                }]);
-              } else {
-                setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не удалось создать фото для "${name || article}". Попробуй описать товар точнее.` }]);
-              }
-            } catch {
-              setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не удалось найти или создать фото для "${name || article}".` }]);
-            }
-          }
-          return;
-        }
-
-        // action: generate_image — генерация фото через AI
-        if (actionData.action === "generate_image") {
-          const genPrompt = actionData.prompt || "";
-          if (!genPrompt) {
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Не указан промпт для генерации." }]);
-            setCycleStatus("done"); setCycleLabel("");
-            return;
-          }
-          setCycleLabel("Генерирую изображение...");
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\nГенерирую картинку...`.trim() }]);
-          try {
-            const r = await fetch(IMAGE_GENERATE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: genPrompt }) });
-            const d = await r.json();
-            setCycleStatus("done"); setCycleLabel("");
-            if (d.url) {
-              setMessages(prev => [...prev, {
-                id: ++msgCounter, role: "assistant",
-                text: `Готово! Вот сгенерированное изображение:\n\n![Изображение](${d.url})\n\nЧтобы добавить на сайт — напиши: добавь эту картинку на сайт: ${d.url}`
-              }]);
-            } else {
-              setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Не удалось сгенерировать изображение. Попробуй описать иначе." }]);
-            }
-          } catch {
-            setCycleStatus("done"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Ошибка при генерации изображения." }]);
-          }
-          return;
-        }
-      }
-
       if (actionMatch && token && repo) {
         let actionData: { action: string; path?: string; paths?: string[] };
         try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
-        const cleanResponseGH = response.replace(/```action[\s\S]*?```/, "").trim();
+        const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
 
         // action: list
         if (actionData.action === "list" && actionData.path) {
           setCycleLabel(`Читаю директорию ${actionData.path}...`);
           const listing = await listDirFromGitHub(actionData.path, token, repo, branch);
           if (listing) {
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nСодержимое \`${actionData.path}\`:\n\`\`\`\n${listing}\n\`\`\``.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nСодержимое \`${actionData.path}\`:\n\`\`\`\n${listing}\n\`\`\``.trim() }]);
             setCycleLabel("Анализирую список...");
             const response2 = await callAI(chatSystemPrompt, `Директория ${actionData.path}:\n${listing}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           } else {
             setCycleStatus("error"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nНе удалось прочитать директорию \`${actionData.path}\`.`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nНе удалось прочитать директорию \`${actionData.path}\`.`.trim() }]);
           }
           return;
         }
@@ -1177,7 +820,7 @@ ${PROJECT_STRUCTURE}`;
             }
           }
           const errNote = errors.length ? `\n\n${errors.join("\n")}` : "";
-          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nПрочитал ${filesContent.length} файл(ов).${errNote}\nАнализирую...`.trim() }]);
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал ${filesContent.length} файл(ов).${errNote}\nАнализирую...`.trim() }]);
           setCycleLabel(`Анализирую ${filesContent.length} файлов...`);
           const response2 = await callAI(chatSystemPrompt, `Файлы:\n\n${filesContent.join("\n\n")}\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
           setCycleStatus("done"); setCycleLabel("");
@@ -1192,14 +835,14 @@ ${PROJECT_STRUCTURE}`;
           if (result.content !== undefined) {
             const sizeStr = result.content.length < 1024 ? `${result.content.length} байт` : `${(result.content.length / 1024).toFixed(1)} КБ`;
             const truncated = result.content.length > 8000 ? result.content.slice(0, 8000) + "\n... [обрезан]" : result.content;
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\nПрочитал \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\nПрочитал \`${actionData.path}\` (${sizeStr}). Анализирую...`.trim() }]);
             setCycleLabel("Анализирую...");
             const response2 = await callAI(chatSystemPrompt, `Файл \`${actionData.path}\`:\n\`\`\`\n${truncated}\n\`\`\`\n\nЗадача: ${text}`, (c) => setCycleLabel(`Анализирую... ${c} симв.`), true);
             setCycleStatus("done"); setCycleLabel("");
             setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
           } else {
             setCycleStatus("error"); setCycleLabel("");
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponseGH}\n\n❌ ${result.error}`.trim() }]);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\n\n❌ ${result.error}`.trim() }]);
           }
           return;
         }
@@ -1214,7 +857,7 @@ ${PROJECT_STRUCTURE}`;
       const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
       setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
     }
-  }, [settings, ghSettings, messages, userMemory]);
+  }, [settings, ghSettings, messages]);
 
   // ── Генерация SQL-миграции по запросу в чате ───────────────────────────────
   const [pendingSql, setPendingSql] = useState<{ sql: string; explanation: string } | null>(null);
@@ -1468,109 +1111,48 @@ ${PROJECT_STRUCTURE}`;
     // ── Режим "site" ───────────────────────────────────────────────────────
     if (!settings.apiKey) { setSettingsOpen(true); return; }
 
-    // Вспомогательная функция — Муравей "думает вслух" в чате
-    const antThink = (msg: string) => {
-      setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "ant-thinking") {
-          return [...prev.slice(0, -1), { ...last, text: msg }];
-        }
-        return [...prev, { id: ++msgCounter, role: "ant-thinking" as Message["role"], text: msg }];
-      });
-    };
-    const antThinkClear = () => {
-      setMessages(prev => prev.filter(m => m.role !== "ant-thinking"));
-    };
-
     try {
-      // ── Шаг 0: Муравей анализирует задачу ─────────────────────────────────
-      setCycleStatus("reading");
-
-      // Определяем — это создание нового сайта или редактирование?
-      const isNewSiteRequest = /с нуля|новый сайт|создай сайт|сделай сайт|новый.*с нуля|совершенно новый|переделай полностью|заново|новый проект/i.test(text);
-
-      antThink("🤔 Анализирую задачу...");
-
-      // ── Шаг 1: Умный анализ через ИИ ──────────────────────────────────────
-      const analysisRaw = await callAI(
-        `Ты Муравей — ИИ-ассистент по созданию сайтов. Пользователь написал тебе задание.
-Проанализируй его и ответь ТОЛЬКО JSON объектом (без пояснений):
-{
-  "taskType": "create" | "edit" | "add_product" | "fix",
-  "businessType": "тип бизнеса одним словом по-русски",
-  "keyFeatures": ["3-5 ключевых элементов которые нужны на сайте"],
-  "designStyle": "описание стиля 5-8 слов",
-  "thinkingMessage": "что именно буду делать — 1 предложение от первого лица, например: Создаю современный сайт аптеки с каталогом лекарств и корзиной"
-}`,
-        text,
-        undefined,
-        false
-      );
-
-      let analysis = { taskType: "create", businessType: "бизнес", keyFeatures: [] as string[], designStyle: "современный", thinkingMessage: "Работаю над сайтом..." };
-      try {
-        const m = analysisRaw.match(/\{[\s\S]*?\}/);
-        if (m) analysis = { ...analysis, ...JSON.parse(m[0]) };
-      } catch { /* используем дефолт */ }
-
-      antThink(`💭 ${analysis.thinkingMessage}`);
-
-      // ── Шаг 1.1: читаем текущий код ────────────────────────────────────────
+      // ── Шаг 1: читаем текущий код ─────────────────────────────────────────
       let currentHtml = "";
       const customAddition = settings.customPrompt?.trim() ? `\n\n## Дополнительные инструкции от владельца:\n${settings.customPrompt.trim()}` : "";
       let systemPrompt = CREATE_SYSTEM_PROMPT + customAddition;
 
       if (fullCodeContext) {
-        antThink(`📂 Читаю загруженный файл ${fullCodeContext.fileName}...`);
         currentHtml = fullCodeContext.html;
         systemPrompt = LOCAL_FILE_EDIT_PROMPT(currentHtml, fullCodeContext.fileName) + customAddition;
       } else if (ghSettings.token && ghSettings.repo) {
+        setCycleStatus("reading");
         const filePath = (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
-        antThink(`📂 Читаю текущий сайт из GitHub (${filePath})...`);
         setCycleLabel(`Читаю ${filePath} из GitHub...`);
         const fetched = await fetchFromGitHub();
         if (fetched.ok && fetched.html) {
-          // Если просят "новый сайт с нуля" — НЕ передаём старый код
-          if (isNewSiteRequest) {
-            antThink(`🗑️ Пользователь просит новый сайт — старый код не использую, создаю с нуля...`);
-            // currentHtml остаётся "", systemPrompt = CREATE_SYSTEM_PROMPT
-          } else {
-            currentHtml = fetched.html;
-            setCurrentFileSha(fetched.sha);
-            setCurrentFilePath(fetched.filePath);
-            systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml) + customAddition;
-            antThink(`✅ Нашёл существующий сайт (${Math.round(fetched.html.length / 1024)}КБ). Буду редактировать.`);
-          }
+          currentHtml = fetched.html;
           setCurrentFileSha(fetched.sha);
           setCurrentFilePath(fetched.filePath);
+          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml) + customAddition;
         } else if (!fetched.ok) {
           const is404 = fetched.message?.includes("404");
           if (!is404) {
+            // Реальная ошибка (токен, сеть) — прерываем и сообщаем
             throw new Error(`Не удалось прочитать файл из GitHub: ${fetched.message}`);
           }
-          antThink(`📄 Файла ещё нет — создаю новый сайт с нуля.`);
+          // 404 = файла ещё нет, создаём с нуля (нормально для первого раза)
         }
-      } else {
-        antThink(`✨ Создаю новый сайт: ${analysis.businessType}. Ключевые элементы: ${analysis.keyFeatures.slice(0, 3).join(", ")}`);
       }
 
-      if (abortRef.current) { antThinkClear(); return; }
+      if (abortRef.current) return;
 
-      // ── Шаг 1.5: генерируем картинки для нового сайта ────────────────────
+      // ── Шаг 1.5: генерируем картинки если нужны ──────────────────────────
       let enrichedText = text;
-      const wantsImages = !currentHtml;
+      const wantsImages = /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|товар|продукт|блюд|еда|ресторан|кафе|кофейн|магазин|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
       if (wantsImages) {
-        antThink(`🎨 Генерирую изображения для ${analysis.businessType}...`);
+        setCycleStatus("generating");
         setCycleLabel("Генерирую картинки...");
         const imgPromptsRaw = await callAI(
-          `Пользователь просит создать сайт. Тебе нужно придумать 2 коротких описания на английском языке для генерации фотореалистичных изображений через AI.
-Правила:
-- Описания должны точно соответствовать теме и типу бизнеса
-- Первое — широкий баннер/обложка сайта (hero image)
-- Второе — атмосферное фото продукта/услуги/интерьера
-- Стиль: professional photography, bright, high quality, no text
-- Верни ТОЛЬКО JSON массив из 2 строк. Без пояснений, только JSON.
-Примеры: ["modern pharmacy interior with shelves of medicine, bright lighting", "various pills and vitamins on white background, professional photo"]`,
+          `Пользователь просит создать сайт. Определи какие картинки нужны и придумай 2-3 коротких описания на английском языке для генерации изображений через AI.
+Правила: описания должны точно соответствовать теме сайта, быть визуально красивыми, фотореалистичными.
+Верни ТОЛЬКО JSON массив строк, например: ["modern gym interior with equipment", "fitness trainer with client"].
+Без пояснений, только JSON.`,
           text
         );
         let imgPrompts: string[] = [];
@@ -1580,79 +1162,54 @@ ${PROJECT_STRUCTURE}`;
         } catch { imgPrompts = []; }
 
         if (imgPrompts.length > 0) {
-          antThink(`🖼️ Загружаю ${imgPrompts.length} изображения (${imgPrompts[0].slice(0, 40)}...)...`);
           const generatedUrls: string[] = [];
-          const results = await Promise.allSettled(
-            imgPrompts.slice(0, 2).map(async (prompt) => {
+          for (let i = 0; i < imgPrompts.length; i++) {
+            if (abortRef.current) return;
+            setCycleLabel(`Генерирую картинку ${i + 1}/${imgPrompts.length}...`);
+            try {
               const r = await fetch(IMAGE_GENERATE_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt }),
+                body: JSON.stringify({ prompt: imgPrompts[i] }),
               });
               const d = await r.json();
-              return d.url as string | undefined;
-            })
-          );
-          for (const result of results) {
-            if (result.status === "fulfilled" && result.value) {
-              generatedUrls.push(result.value);
-            }
+              if (d.url) generatedUrls.push(d.url);
+            } catch { /* продолжаем без этой картинки */ }
           }
           if (generatedUrls.length > 0) {
-            antThink(`✅ Картинки готовы (${generatedUrls.length} шт). Начинаю верстать сайт...`);
             const urlList = generatedUrls.map((u, i) => `URL картинки ${i + 1}: ${u}`).join("\n");
             enrichedText = `${text}
 
-ВАЖНО: Я уже сгенерировал специальные картинки для этого сайта. ОБЯЗАТЕЛЬНО используй их:
+ВАЖНО: Я уже сгенерировал специальные картинки для этого сайта. ОБЯЗАТЕЛЬНО используй их в дизайне:
 ${urlList}
 
-Правила использования картинок:
-- URL картинки 1 — главный hero-баннер на всю ширину (object-fit: cover, height: 450-550px)
-- URL картинки 2 — в секции услуг, продуктов или "О нас" (object-fit: cover)
-- Каждый <img> ОБЯЗАТЕЛЬНО: src="[URL]" style="width:100%;height:100%;object-fit:cover;display:block"
-- НЕ используй никаких других изображений — только эти URL`;
+Требования к использованию картинок:
+- Первая картинка — главный баннер/герой секция на всю ширину (object-fit: cover, height: 400-500px)
+- Остальные картинки — в галерее, карточках или секциях сайта
+- Все <img> должны иметь style="object-fit: cover" и заданные размеры
+- НЕ используй placeholder-картинки — только переданные URL`;
           }
         }
       }
 
-      if (abortRef.current) { antThinkClear(); return; }
+      if (abortRef.current) return;
 
       // ── Шаг 2: генерируем HTML ────────────────────────────────────────────
       setCycleStatus("generating");
-      const actionLabel = currentHtml ? "Вношу правки в сайт" : `Создаю сайт ${analysis.businessType}`;
-      antThink(`⚙️ ${actionLabel}... (это займёт 20-40 секунд)`);
-      setCycleLabel(`${actionLabel}...`);
+      setCycleLabel("Создаю сайт...");
 
       // При редактировании (есть контекст) — передаём историю чата для памяти изменений
       const passHistory = !!(fullCodeContext || (ghSettings.token && ghSettings.repo && currentHtml));
-
-      let rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
-        setCycleLabel(`${actionLabel}... ${chars} симв.`);
+      const rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
+        setCycleLabel(`Создаю сайт... ${chars} симв.`);
       }, passHistory);
-      let cleanHtml = extractHtml(rawResponse);
-
-      // Автоматический retry если вернулся не HTML
-      if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
-        setCycleLabel("Повторяю запрос...");
-        const retryPrompt = `CRITICAL: You MUST respond with ONLY a complete HTML document starting with <!DOCTYPE html>.
-Do NOT write any text, plans, or explanations. Start your response with <!DOCTYPE html> right now.
-User request: ${enrichedText}`;
-        rawResponse = await callAI(
-          `You are an HTML generator. Output ONLY <!DOCTYPE html>...</html>. Nothing else.`,
-          retryPrompt,
-          (chars) => { setCycleLabel(`Повторяю... ${chars} симв.`); },
-          false
-        );
-        cleanHtml = extractHtml(rawResponse);
-      }
+      const cleanHtml = extractHtml(rawResponse);
 
       if (!/<[a-z][\s\S]*>/i.test(cleanHtml)) {
-        throw new Error(`Не удалось получить HTML от модели. Попробуйте переформулировать запрос.`);
+        throw new Error(`Модель вернула не HTML: "${cleanHtml.slice(0, 200)}". Попробуйте ещё раз.`);
       }
 
-      if (abortRef.current) { antThinkClear(); return; }
-
-      antThinkClear();
+      if (abortRef.current) return;
 
       const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
       savePreviewHtml(injectLightTheme(htmlWithBase));
@@ -1660,14 +1217,12 @@ User request: ${enrichedText}`;
 
       const assistantId = ++msgCounter;
       const hasGitHub = !!(ghSettings.token && ghSettings.repo);
-      const sizeKb = Math.round(cleanHtml.length / 1024);
-      const doneText = currentHtml
-        ? `✅ Готово! Внёс правки в сайт (${sizeKb} КБ).${hasGitHub ? " Загружаю в GitHub..." : " Настройте GitHub для сохранения."}`
-        : `✅ Готово! Создал сайт для «${analysis.businessType}» (${sizeKb} КБ).${hasGitHub ? " Загружаю в GitHub..." : " Настройте GitHub для сохранения."}`;
       setMessages(prev => [...prev, {
         id: assistantId,
         role: "assistant",
-        text: doneText,
+        text: currentHtml
+          ? hasGitHub ? "Готово! Правки внесены. Загружаю в GitHub..." : "Готово! Правки внесены. Настройте GitHub чтобы сохранить."
+          : hasGitHub ? "Готово! Сайт создан. Загружаю в GitHub..." : "Готово! Сайт создан. Настройте GitHub для сохранения.",
         html: cleanHtml,
       }]);
 
@@ -1792,7 +1347,6 @@ User request: ${enrichedText}`;
 
   const handleNewProject = () => {
     setMessages([]);
-    try { localStorage.removeItem("lumen_chat_history"); } catch { /* ignore */ }
     savePreviewHtml(null);
     setHtmlHistory([]);
     setCycleStatus("idle");
