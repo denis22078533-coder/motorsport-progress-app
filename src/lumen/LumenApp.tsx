@@ -953,11 +953,25 @@ export default function LumenApp() {
         : "";
       const chatSystemPrompt = `Ты дружелюбный AI-ассистент Муравей. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
 
-ВАЖНО — ты умеешь самостоятельно искать фото товаров! Если пользователь просит найти фото, добавить фото товара по артикулу или названию — используй action-блок:
+## ТВОИ СУПЕРСПОСОБНОСТИ — ТЫ УМЕЕШЬ РАБОТАТЬ С ФОТО:
+
+### 1. Искать фото товара по названию/артикулу:
 \`\`\`action
 {"action":"search_image","article":"АРТИКУЛ","name":"НАЗВАНИЕ ТОВАРА"}
 \`\`\`
-Никогда не говори что не можешь искать фото — ты можешь! Всегда используй action-блок search_image когда нужно фото товара.
+
+### 2. Генерировать фото через AI по описанию:
+\`\`\`action
+{"action":"generate_image","prompt":"ОПИСАНИЕ НА АНГЛИЙСКОМ, например: pharmacy medicine pills on white background, professional product photo"}
+\`\`\`
+
+ПРАВИЛА:
+- Если пользователь просит найти/добавить фото конкретного товара — используй search_image
+- Если пользователь просит создать/сгенерировать картинку или нет конкретного товара — используй generate_image  
+- НИКОГДА не говори "я не могу видеть изображения" или "я не могу создать фото" — ты можешь!
+- Если пользователь прислал изображение — скажи что видишь его описание и предложи найти похожее или сгенерировать через action-блок
+- Всегда используй action-блок вместо отказа
+
 ${PROJECT_STRUCTURE}`;
 
       // ── Шаг 1: первый вызов ИИ ────────────────────────────────────────────
@@ -971,7 +985,7 @@ ${PROJECT_STRUCTURE}`;
       // ── Шаг 2: обрабатываем action-блоки ─────────────────────────────────
       const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
       if (actionMatch) {
-        let actionData: { action: string; path?: string; paths?: string[]; article?: string; name?: string };
+        let actionData: { action: string; path?: string; paths?: string[]; article?: string; name?: string; prompt?: string };
         try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
         const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
 
@@ -987,10 +1001,57 @@ ${PROJECT_STRUCTURE}`;
             const label = [name, article].filter(Boolean).join(" / ");
             setMessages(prev => [...prev, {
               id: ++msgCounter, role: "assistant",
-              text: `Нашёл фото для **${label}**:\n\n![${label}](${imgUrl})\n\nСсылка: ${imgUrl}\n\nЧтобы добавить карточку товара на сайт — переключись в режим "Сайт" и напиши: добавь карточку товара "${name}" артикул ${article} с этим фото: ${imgUrl}`
+              text: `Нашёл фото для **${label}**:\n\n![${label}](${imgUrl})\n\nЧтобы добавить на сайт — напиши: добавь товар "${name}" с фото: ${imgUrl}`
             }]);
           } else {
-            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не удалось найти фото для "${name || article}". Попробуй уточнить название товара.` }]);
+            // Если поиск не дал результатов — пробуем сгенерировать
+            setCycleLabel(`Генерирую фото: ${name || article}...`);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не нашёл готовое фото, генерирую через AI...` }]);
+            try {
+              const genPrompt = `${name || article}, product photo, white background, professional, high quality`;
+              const r = await fetch(IMAGE_GENERATE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: genPrompt }) });
+              const d = await r.json();
+              if (d.url) {
+                const label = [name, article].filter(Boolean).join(" / ");
+                setMessages(prev => [...prev, {
+                  id: ++msgCounter, role: "assistant",
+                  text: `Сгенерировал фото для **${label}**:\n\n![${label}](${d.url})\n\nЧтобы добавить на сайт — напиши: добавь товар "${name}" с фото: ${d.url}`
+                }]);
+              } else {
+                setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не удалось создать фото для "${name || article}". Попробуй описать товар точнее.` }]);
+              }
+            } catch {
+              setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Не удалось найти или создать фото для "${name || article}".` }]);
+            }
+          }
+          return;
+        }
+
+        // action: generate_image — генерация фото через AI
+        if (actionData.action === "generate_image") {
+          const genPrompt = actionData.prompt || "";
+          if (!genPrompt) {
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Не указан промпт для генерации." }]);
+            setCycleStatus("done"); setCycleLabel("");
+            return;
+          }
+          setCycleLabel("Генерирую изображение...");
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\nГенерирую картинку...`.trim() }]);
+          try {
+            const r = await fetch(IMAGE_GENERATE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: genPrompt }) });
+            const d = await r.json();
+            setCycleStatus("done"); setCycleLabel("");
+            if (d.url) {
+              setMessages(prev => [...prev, {
+                id: ++msgCounter, role: "assistant",
+                text: `Готово! Вот сгенерированное изображение:\n\n![Изображение](${d.url})\n\nЧтобы добавить на сайт — напиши: добавь эту картинку на сайт: ${d.url}`
+              }]);
+            } else {
+              setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Не удалось сгенерировать изображение. Попробуй описать иначе." }]);
+            }
+          } catch {
+            setCycleStatus("done"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: "Ошибка при генерации изображения." }]);
           }
           return;
         }
