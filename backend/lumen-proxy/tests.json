@@ -7,10 +7,10 @@
       "expectedStatus": 200
     },
     {
-      "name": "Search product image by name",
+      "name": "Search product image by article and name",
       "method": "POST",
       "path": "/",
-      "body": {"__action__": "search_image", "name": "Болт М8"},
+      "body": {"__action__": "search_image", "article": "73/6/8/8", "name": "Молоток Вихрь"},
       "expectedStatus": 200,
       "expectedBody": {"url": "string"},
       "bodyMatcher": "partial"

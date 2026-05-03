@@ -101,45 +101,49 @@ def search_via_google_cse(query: str, api_key: str, cx: str) -> str | None:
     return None
 
 
-def search_via_duckduckgo(query: str) -> str | None:
-    """Ищет фото через DuckDuckGo Images (без ключей, работает сразу)"""
+def search_via_bing(query: str) -> str | None:
+    """Ищет фото через Bing Images scraping (без ключей)"""
     try:
-        # Шаг 1: получаем vqd-токен для поиска
         encoded_q = urllib.parse.quote(query)
-        url1 = f"https://duckduckgo.com/?q={encoded_q}&iax=images&ia=images"
-        req1 = urllib.request.Request(url1, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+        url = f"https://www.bing.com/images/search?q={encoded_q}&form=HDRSC2&first=1&tsc=ImageHoverTitle"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Referer': 'https://www.bing.com/',
         })
-        with urllib.request.urlopen(req1, timeout=10) as r:
-            html = r.read().decode('utf-8')
-        import re
-        m = re.search(r'vqd=([^&\'"]+)', html)
-        if not m:
-            return None
-        vqd = m.group(1)
-
-        # Шаг 2: запрашиваем результаты поиска картинок
-        params = urllib.parse.urlencode({
-            'l': 'ru-ru', 'o': 'json', 'q': query,
-            'vqd': vqd, 'f': ',,,,,', 'p': '1'
-        })
-        url2 = f"https://duckduckgo.com/i.js?{params}"
-        req2 = urllib.request.Request(url2, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-            'Referer': 'https://duckduckgo.com/',
-            'Accept': 'application/json',
-        })
-        with urllib.request.urlopen(req2, timeout=10) as r:
-            data = json.loads(r.read().decode('utf-8'))
-        results = data.get('results', [])
-        for item in results[:5]:
-            img = item.get('image', '')
-            if img and img.startswith('http') and not img.endswith('.svg'):
-                print(f'[search-image] duckduckgo: {img}')
+        with urllib.request.urlopen(req, timeout=12) as r:
+            html = r.read().decode('utf-8', errors='ignore')
+        # Bing хранит URL картинок в murl= параметре
+        matches = re.findall(r'"murl":"(https?://[^"]+?\.(?:jpg|jpeg|png|webp))"', html)
+        for img in matches[:10]:
+            if img and not any(x in img for x in ['bing.com', 'microsoft.com']):
+                print(f'[search-image] bing: {img}')
                 return img
     except Exception as e:
-        print(f'[search-image] duckduckgo error: {e}')
+        print(f'[search-image] bing error: {e}')
+    return None
+
+
+def search_via_yandex(query: str) -> str | None:
+    """Ищет фото через Яндекс Картинки scraping"""
+    try:
+        encoded_q = urllib.parse.quote(query)
+        url = f"https://yandex.ru/images/search?text={encoded_q}&itype=photo"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'ru-RU,ru;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        })
+        with urllib.request.urlopen(req, timeout=12) as r:
+            html = r.read().decode('utf-8', errors='ignore')
+        matches = re.findall(r'"url":"(https?://[^"]+?\.(?:jpg|jpeg|png|webp))"', html)
+        for img in matches[:10]:
+            if img and not any(x in img for x in ['yandex.', 'ya.ru']):
+                print(f'[search-image] yandex: {img}')
+                return img
+    except Exception as e:
+        print(f'[search-image] yandex error: {e}')
     return None
 
 
@@ -183,12 +187,15 @@ def generate_product_image_pollinations(name: str, article: str) -> str | None:
 
 
 def search_product_image(article: str, name: str) -> str | None:
-    """Ищет фото товара: Google CSE → DuckDuckGo → Openverse → AI-генерация"""
+    """Ищет реальное фото товара из интернета: Google CSE → Bing → Яндекс → Openverse → AI-генерация"""
     import os
 
     google_key = os.environ.get('GOOGLE_CSE_KEY', '')
     google_cx = os.environ.get('GOOGLE_CSE_CX', '')
+    # Запрос: название + артикул для точного поиска
     search_query = f"{name} {article}".strip() or name or article
+
+    print(f'[search-image] query="{search_query}" article="{article}" name="{name}"')
 
     # 1. Google Custom Search (если настроен)
     if google_key and google_cx:
@@ -196,17 +203,22 @@ def search_product_image(article: str, name: str) -> str | None:
         if img:
             return img
 
-    # 2. DuckDuckGo Images — реальные фото из интернета, без ключей
-    img = search_via_duckduckgo(search_query)
+    # 2. Bing Images — реальные фото из интернета
+    img = search_via_bing(search_query)
     if img:
         return img
 
-    # 3. Openverse — открытая база лицензионных фото
+    # 3. Яндекс Картинки — особенно хорош для русских товаров
+    img = search_via_yandex(search_query)
+    if img:
+        return img
+
+    # 4. Openverse — открытая база лицензионных фото
     img = search_via_openverse(search_query)
     if img:
         return img
 
-    # 4. Fallback — AI-генерация точного фото товара
+    # 5. Fallback — AI-генерация точного фото товара
     return generate_product_image_pollinations(name, article)
 
 

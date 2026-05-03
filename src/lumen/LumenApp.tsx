@@ -710,16 +710,16 @@ export default function LumenApp() {
     const isProductRequest = /карточк|товар|артикул|артикл|номенклатур|позиц|продукт|sku|код товар/i.test(lc);
     if (!isProductRequest) return null;
 
-    // Артикул: поддерживаем цифры, буквы, дефисы, точки, слэши (73/6/8/8)
-    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9\-_./]+)/i)
-      || text.match(/sku[:\s]*([A-Za-z0-9\-_./]+)/i)
-      || text.match(/код[:\s]*([A-Za-z0-9\-_./]+)/i)
-      || text.match(/[#№]\s*([A-Za-z0-9\-_./]+)/);
+    // Артикул: минимум 2 символа, поддерживаем слэши (73/6/8/8)
+    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9][A-Za-zА-Яа-я0-9\-_./]{1,})/i)
+      || text.match(/sku[:\s]*([A-Za-z0-9][A-Za-z0-9\-_./]{1,})/i)
+      || text.match(/код[:\s]*([A-Za-z0-9][A-Za-z0-9\-_./]{1,})/i)
+      || text.match(/[#№]\s*([A-Za-z0-9][A-Za-z0-9\-_./]{1,})/);
 
-    // Название: берём текст до артикула или до конца строки
-    const nameMatch = text.match(/назван[иеие]+[:\s]+([^,\n.]+)/i)
-      || text.match(/наименован[иеие]+[:\s]+([^,\n.]+)/i)
-      || text.match(/товар[:\s"«]+([А-Яа-яA-Za-z][^,\n"»0-9]{2,40})/i);
+    // Название: слова с заглавной буквы, не менее 3 символов
+    const nameMatch = text.match(/назван[иеие]+[:\s]+([^,\n.]{3,})/i)
+      || text.match(/наименован[иеие]+[:\s]+([^,\n.]{3,})/i)
+      || text.match(/товар[:\s"«]+([А-ЯA-Z][а-яёa-z][^,\n"»]{2,50})/i);
 
     const article = articleMatch ? articleMatch[1].trim() : "";
     // Очищаем название от артикула если он туда попал
