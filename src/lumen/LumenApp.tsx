@@ -106,8 +106,19 @@ const CREATE_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
 - Google Fonts CDN — pick 1-2 fonts matching brand tone
 - All JS inline in <script> tags, mobile-first responsive
 - Scroll animations via IntersectionObserver
-- Images: use provided URLs. Placeholders = CSS gradients (NO external image services)
-- Write REAL persuasive copy in Russian — specific, compelling, no lorem ipsum`;
+- Write REAL persuasive copy in Russian — specific, compelling, no lorem ipsum
+
+## IMAGES — CRITICAL RULES (violations break the site):
+- ❌ NEVER use <img> tags with external URLs (unsplash.com, picsum.photos, via.placeholder.com, loremflickr.com, placehold.co, source.unsplash.com, images.unsplash.com, or ANY other external image CDN)
+- ❌ NEVER use src="https://..." for images unless the URL was explicitly provided by the user
+- ✅ For hero backgrounds: use CSS linear-gradient or radial-gradient backgrounds
+- ✅ For product/menu cards without photo: use a div with gradient background + emoji or icon centered inside
+- ✅ For team/avatar photos: use colored circle div with initials (e.g. <div style="background:#e67e22;width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.5rem;font-weight:bold">АИ</div>)
+- ✅ For gallery without photos: use gradient cards with relevant emoji and text
+- ✅ If user provided image URLs in their message — use those exact URLs
+
+Example product card without photo:
+<div style="background:linear-gradient(135deg,#2c1810,#5c3317);height:200px;display:flex;align-items:center;justify-content:center;font-size:3rem">☕</div>`;
 
 const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
@@ -123,6 +134,8 @@ Output ONLY the complete modified HTML document. No explanations, no markdown.
 - ✅ Все остальные части сайта оставь ТОЧНО как есть
 - ✅ Если просят добавить товар — добавь только карточку товара в нужное место
 - ✅ Если найдено фото товара — используй ИМЕННО этот URL, не придумывай другое
+- ❌ ЗАПРЕЩЕНО вставлять <img> с внешними URL (unsplash, picsum, placeholder, placehold.co и т.д.) — они не работают
+- ✅ Вместо изображений без URL — CSS градиент + emoji/иконка
 
 --- ТЕКУЩИЙ КОД САЙТА (редактируй только нужные части) ---
 ${currentHtml}
