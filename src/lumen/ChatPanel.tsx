@@ -28,12 +28,110 @@ interface Props {
   onOpenSettings?: () => void;
 }
 
-const SUGGESTIONS = [
-  { text: "Сайт кофейни с меню и фотографиями", icon: "Globe" },
-  { text: "Нарисуй красивый закат над морем", icon: "Image" },
-  { text: "Как сделать сайт заметным в Google?", icon: "MessageCircle" },
-  { text: "Лендинг для фитнес-клуба с тарифами", icon: "Globe" },
+const SUGGESTION_CATEGORIES = [
+  {
+    label: "🛍 Торговля",
+    items: [
+      "Интернет-магазин одежды с каталогом и корзиной",
+      "Сайт магазина электроники с фильтрами и ценами",
+      "Лендинг для продажи мёда с доставкой по России",
+      "Магазин handmade украшений с портфолио мастера",
+      "Сайт оптовой торговли стройматериалами",
+    ],
+  },
+  {
+    label: "💊 Медицина",
+    items: [
+      "Сайт аптеки с каталогом препаратов и доставкой",
+      "Лендинг частной клиники с записью на приём",
+      "Сайт стоматологии с услугами и ценами",
+      "Сайт ветеринарной клиники с онлайн-записью",
+      "Лендинг психолога с расписанием сессий",
+    ],
+  },
+  {
+    label: "🍕 Еда и рестораны",
+    items: [
+      "Сайт кофейни с меню и онлайн-заказом",
+      "Лендинг пиццерии с доставкой и акциями",
+      "Сайт ресторана с меню и бронированием столиков",
+      "Сайт кейтеринга для корпоративных мероприятий",
+      "Лендинг кондитерской с тортами на заказ",
+    ],
+  },
+  {
+    label: "💇 Красота и уход",
+    items: [
+      "Сайт салона красоты с услугами и ценами",
+      "Лендинг барбершопа с онлайн-записью к мастеру",
+      "Сайт студии маникюра и педикюра",
+      "Лендинг мастера перманентного макияжа",
+      "Сайт SPA-центра с прайс-листом и акциями",
+    ],
+  },
+  {
+    label: "🏋️ Спорт и фитнес",
+    items: [
+      "Лендинг фитнес-клуба с тарифами и расписанием",
+      "Сайт персонального тренера с программами",
+      "Сайт йога-студии с расписанием занятий",
+      "Лендинг школы танцев с видео и ценами",
+      "Сайт спортивной секции для детей",
+    ],
+  },
+  {
+    label: "🏠 Недвижимость",
+    items: [
+      "Сайт агентства недвижимости с каталогом объектов",
+      "Лендинг застройщика с планировками квартир",
+      "Сайт аренды посуточного жилья",
+      "Лендинг управляющей компании ЖК",
+      "Сайт риэлтора-частника с портфолио сделок",
+    ],
+  },
+  {
+    label: "🔧 Услуги и ремонт",
+    items: [
+      "Сайт строительной компании с портфолио и сметой",
+      "Лендинг сантехника с вызовом на дом",
+      "Сайт клининговой компании с тарифами",
+      "Лендинг автосервиса с ценами на работы",
+      "Сайт компании по ремонту квартир",
+    ],
+  },
+  {
+    label: "📚 Образование",
+    items: [
+      "Сайт онлайн-школы с курсами и тарифами",
+      "Лендинг репетитора с расписанием и ценами",
+      "Сайт детского центра развития",
+      "Лендинг языковой школы с уровнями и записью",
+      "Сайт корпоративного обучения для компаний",
+    ],
+  },
+  {
+    label: "🚗 Авто",
+    items: [
+      "Сайт автосалона с каталогом машин и ценами",
+      "Лендинг автошколы с программами и записью",
+      "Сайт проката автомобилей с онлайн-бронированием",
+      "Сайт детейлинг-центра с услугами и ценами",
+      "Лендинг грузоперевозок с калькулятором стоимости",
+    ],
+  },
+  {
+    label: "⚖️ Юридические",
+    items: [
+      "Сайт юридической компании с услугами и консультацией",
+      "Лендинг адвоката с практикой и отзывами",
+      "Сайт бухгалтерской фирмы с тарифами",
+      "Лендинг нотариуса с услугами и ценами",
+      "Сайт агентства по банкротству физических лиц",
+    ],
+  },
 ];
+
+const SUGGESTIONS = SUGGESTION_CATEGORIES.flatMap(c => c.items.slice(0, 1)).map(text => ({ text, icon: "Globe" }));
 
 function detectMode(text: string): ChatMode {
   const t = text.toLowerCase();
@@ -77,6 +175,7 @@ export default function ChatPanel({
   const [kbOffset, setKbOffset] = useState(0);
   const [lastMode, setLastMode] = useState<ChatMode>("chat");
   const [sqlCopied, setSqlCopied] = useState(false);
+  const [activeCat, setActiveCat] = useState(0);
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string; type: "image" | "text" } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
@@ -242,21 +341,40 @@ export default function ChatPanel({
 
           {/* Empty state */}
           {messages.length === 0 && !isActive && (
-            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-2 mt-2">
-              <p className="text-white/25 text-xs font-medium mb-1">Попробуйте написать:</p>
-              {SUGGESTIONS.map((s, i) => (
-                <motion.button
-                  key={s.text}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.07 }}
-                  onClick={() => { setValue(s.text); textareaRef.current?.focus(); }}
-                  className="text-left px-3 py-2.5 rounded-lg border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/[0.15] text-white/50 hover:text-white/80 text-xs transition-all flex items-center gap-2.5"
-                >
-                  <Icon name={s.icon} size={12} className="opacity-40 shrink-0" />
-                  {s.text}
-                </motion.button>
-              ))}
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-2 mt-1">
+              <p className="text-white/25 text-xs font-medium mb-1">Примеры сайтов по тематикам:</p>
+              {/* Category tabs */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
+                {SUGGESTION_CATEGORIES.map((cat, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveCat(i)}
+                    className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-all whitespace-nowrap ${
+                      activeCat === i
+                        ? "bg-purple-600/70 text-white border border-purple-500/50"
+                        : "bg-white/[0.04] text-white/40 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white/60"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+              {/* Items for active category */}
+              <div className="flex flex-col gap-1.5 mt-0.5">
+                {SUGGESTION_CATEGORIES[activeCat].items.map((text, i) => (
+                  <motion.button
+                    key={text}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={() => { setValue(text); textareaRef.current?.focus(); }}
+                    className="text-left px-3 py-2 rounded-lg border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:border-purple-500/30 text-white/50 hover:text-white/80 text-xs transition-all flex items-center gap-2"
+                  >
+                    <Icon name="Globe" size={11} className="opacity-30 shrink-0 text-purple-400" />
+                    {text}
+                  </motion.button>
+                ))}
+              </div>
             </motion.div>
           )}
 
