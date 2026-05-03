@@ -387,6 +387,26 @@ export default function ChatPanel({
               transition={{ duration: 0.25 }}
               className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
+              {/* Ant thinking bubble */}
+              {msg.role === "ant-thinking" && (
+                <div className="flex items-start gap-2 max-w-[92%]">
+                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5"
+                    style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}>
+                    <span style={{ fontSize: 10 }}>🐜</span>
+                  </div>
+                  <div className="px-3 py-2 rounded-xl rounded-tl-sm text-xs leading-relaxed"
+                    style={{ background: "rgba(249,115,22,0.10)", border: "1px solid rgba(249,115,22,0.25)", color: "rgba(253,186,116,0.95)" }}>
+                    <motion.span
+                      animate={{ opacity: [1, 0.5, 1] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="mr-1.5 inline-block text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: "#f97316" }}
+                    >думаю</motion.span>
+                    {msg.text}
+                  </div>
+                </div>
+              )}
+
               {/* Image message */}
               {msg.role === "assistant" && msg.html?.startsWith("__IMAGE__:") && (
                 <div className="flex flex-col gap-2 items-start max-w-[92%]">
@@ -410,7 +430,7 @@ export default function ChatPanel({
               )}
 
               {/* Text message */}
-              {!(msg.role === "assistant" && msg.html?.startsWith("__IMAGE__:")) && (
+              {msg.role !== "ant-thinking" && !(msg.role === "assistant" && msg.html?.startsWith("__IMAGE__:")) && (
                 <div
                   className={`max-w-[90%] px-3 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap ${
                     msg.role === "user"

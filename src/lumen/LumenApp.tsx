@@ -19,7 +19,7 @@ type MobileTab = "chat" | "preview";
 
 export interface Message {
   id: number;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "ant-thinking";
   text: string;
   html?: string; // HTML-результат, который можно задеплоить
 }
@@ -318,10 +318,11 @@ export default function LumenApp() {
     }]);
   };
 
-  // Автосохранение истории чата (макс. 100 последних сообщений)
+  // Автосохранение истории чата (макс. 100 последних сообщений, без временных мыслей)
   useEffect(() => {
     try {
-      localStorage.setItem("lumen_chat_history", JSON.stringify(messages.slice(-100)));
+      const toSave = messages.filter(m => m.role !== "ant-thinking").slice(-100);
+      localStorage.setItem("lumen_chat_history", JSON.stringify(toSave));
     } catch { /* ignore */ }
   }, [messages]);
 
@@ -671,7 +672,7 @@ export default function LumenApp() {
   const buildChatHistory = (currentUserText: string, maxPairs = 8): { role: string; content: string }[] => {
     // Берём последние maxPairs пар (user+assistant) из истории, исключая картинки и длинный HTML
     const history: { role: string; content: string }[] = [];
-    const recent = messages.slice(-maxPairs * 2);
+    const recent = messages.filter(m => m.role !== "ant-thinking").slice(-maxPairs * 2);
     for (const msg of recent) {
       if (msg.html?.startsWith("__IMAGE__:")) continue; // пропускаем картинки
       const content = msg.html
@@ -1467,45 +1468,103 @@ ${PROJECT_STRUCTURE}`;
     // ── Режим "site" ───────────────────────────────────────────────────────
     if (!settings.apiKey) { setSettingsOpen(true); return; }
 
+    // Вспомогательная функция — Муравей "думает вслух" в чате
+    const antThink = (msg: string) => {
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "ant-thinking") {
+          return [...prev.slice(0, -1), { ...last, text: msg }];
+        }
+        return [...prev, { id: ++msgCounter, role: "ant-thinking" as Message["role"], text: msg }];
+      });
+    };
+    const antThinkClear = () => {
+      setMessages(prev => prev.filter(m => m.role !== "ant-thinking"));
+    };
+
     try {
-      // ── Шаг 1: читаем текущий код ─────────────────────────────────────────
+      // ── Шаг 0: Муравей анализирует задачу ─────────────────────────────────
+      setCycleStatus("reading");
+
+      // Определяем — это создание нового сайта или редактирование?
+      const isNewSiteRequest = /с нуля|новый сайт|создай сайт|сделай сайт|новый.*с нуля|совершенно новый|переделай полностью|заново|новый проект/i.test(text);
+
+      antThink("🤔 Анализирую задачу...");
+
+      // ── Шаг 1: Умный анализ через ИИ ──────────────────────────────────────
+      const analysisRaw = await callAI(
+        `Ты Муравей — ИИ-ассистент по созданию сайтов. Пользователь написал тебе задание.
+Проанализируй его и ответь ТОЛЬКО JSON объектом (без пояснений):
+{
+  "taskType": "create" | "edit" | "add_product" | "fix",
+  "businessType": "тип бизнеса одним словом по-русски",
+  "keyFeatures": ["3-5 ключевых элементов которые нужны на сайте"],
+  "designStyle": "описание стиля 5-8 слов",
+  "thinkingMessage": "что именно буду делать — 1 предложение от первого лица, например: Создаю современный сайт аптеки с каталогом лекарств и корзиной"
+}`,
+        text,
+        undefined,
+        false
+      );
+
+      let analysis = { taskType: "create", businessType: "бизнес", keyFeatures: [] as string[], designStyle: "современный", thinkingMessage: "Работаю над сайтом..." };
+      try {
+        const m = analysisRaw.match(/\{[\s\S]*?\}/);
+        if (m) analysis = { ...analysis, ...JSON.parse(m[0]) };
+      } catch { /* используем дефолт */ }
+
+      antThink(`💭 ${analysis.thinkingMessage}`);
+
+      // ── Шаг 1.1: читаем текущий код ────────────────────────────────────────
       let currentHtml = "";
       const customAddition = settings.customPrompt?.trim() ? `\n\n## Дополнительные инструкции от владельца:\n${settings.customPrompt.trim()}` : "";
       let systemPrompt = CREATE_SYSTEM_PROMPT + customAddition;
 
       if (fullCodeContext) {
+        antThink(`📂 Читаю загруженный файл ${fullCodeContext.fileName}...`);
         currentHtml = fullCodeContext.html;
         systemPrompt = LOCAL_FILE_EDIT_PROMPT(currentHtml, fullCodeContext.fileName) + customAddition;
       } else if (ghSettings.token && ghSettings.repo) {
-        setCycleStatus("reading");
         const filePath = (ghSettings.filePath || "index.html").trim().replace(/^\//, "");
+        antThink(`📂 Читаю текущий сайт из GitHub (${filePath})...`);
         setCycleLabel(`Читаю ${filePath} из GitHub...`);
         const fetched = await fetchFromGitHub();
         if (fetched.ok && fetched.html) {
-          currentHtml = fetched.html;
+          // Если просят "новый сайт с нуля" — НЕ передаём старый код
+          if (isNewSiteRequest) {
+            antThink(`🗑️ Пользователь просит новый сайт — старый код не использую, создаю с нуля...`);
+            // currentHtml остаётся "", systemPrompt = CREATE_SYSTEM_PROMPT
+          } else {
+            currentHtml = fetched.html;
+            setCurrentFileSha(fetched.sha);
+            setCurrentFilePath(fetched.filePath);
+            systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml) + customAddition;
+            antThink(`✅ Нашёл существующий сайт (${Math.round(fetched.html.length / 1024)}КБ). Буду редактировать.`);
+          }
           setCurrentFileSha(fetched.sha);
           setCurrentFilePath(fetched.filePath);
-          systemPrompt = EDIT_SYSTEM_PROMPT_FULL(currentHtml) + customAddition;
         } else if (!fetched.ok) {
           const is404 = fetched.message?.includes("404");
           if (!is404) {
-            // Реальная ошибка (токен, сеть) — прерываем и сообщаем
             throw new Error(`Не удалось прочитать файл из GitHub: ${fetched.message}`);
           }
-          // 404 = файла ещё нет, создаём с нуля (нормально для первого раза)
+          antThink(`📄 Файла ещё нет — создаю новый сайт с нуля.`);
         }
+      } else {
+        antThink(`✨ Создаю новый сайт: ${analysis.businessType}. Ключевые элементы: ${analysis.keyFeatures.slice(0, 3).join(", ")}`);
       }
 
-      if (abortRef.current) return;
+      if (abortRef.current) { antThinkClear(); return; }
 
       // ── Шаг 1.5: поиск фото товара по артикулу / названию ────────────────
       let enrichedText = text;
       const productInfo = detectProductRequest(text);
       if (productInfo) {
-        setCycleStatus("generating");
+        antThink(`🔍 Ищу фото товара: ${productInfo.name || productInfo.article}...`);
         setCycleLabel("Ищу фото товара...");
         const productImgUrl = await searchProductImage(productInfo.article, productInfo.name);
         if (productImgUrl) {
+          antThink(`🖼️ Нашёл фото товара! Добавляю в задание...`);
           enrichedText = `${text}
 
 НАЙДЕНО РЕАЛЬНОЕ ФОТО ТОВАРА из интернета — используй именно этот URL:
@@ -1518,14 +1577,15 @@ ${PROJECT_STRUCTURE}`;
 - НЕ генерируй и НЕ придумывай другие картинки
 - Добавь карточку товара: фото (object-fit: cover), название, артикул, кнопка "В корзину"
 - НЕ меняй остальные части сайта — только добавь карточку товара`;
+        } else {
+          antThink(`⚠️ Фото не нашёл — создам карточку товара с заглушкой.`);
         }
       }
 
-      // ── Шаг 1.6: генерируем картинки для любого нового сайта ────────────
-      // Всегда генерируем для новых сайтов (нет currentHtml), кроме случаев когда уже нашли фото товара
+      // ── Шаг 1.6: генерируем картинки для нового сайта ────────────────────
       const wantsImages = !productInfo && !currentHtml;
       if (wantsImages) {
-        setCycleStatus("generating");
+        antThink(`🎨 Генерирую изображения для ${analysis.businessType}...`);
         setCycleLabel("Генерирую картинки...");
         const imgPromptsRaw = await callAI(
           `Пользователь просит создать сайт. Тебе нужно придумать 2 коротких описания на английском языке для генерации фотореалистичных изображений через AI.
@@ -1545,8 +1605,8 @@ ${PROJECT_STRUCTURE}`;
         } catch { imgPrompts = []; }
 
         if (imgPrompts.length > 0) {
+          antThink(`🖼️ Загружаю ${imgPrompts.length} изображения (${imgPrompts[0].slice(0, 40)}...)...`);
           const generatedUrls: string[] = [];
-          // Запускаем генерацию параллельно для скорости
           const results = await Promise.allSettled(
             imgPrompts.slice(0, 2).map(async (prompt) => {
               const r = await fetch(IMAGE_GENERATE_URL, {
@@ -1564,6 +1624,7 @@ ${PROJECT_STRUCTURE}`;
             }
           }
           if (generatedUrls.length > 0) {
+            antThink(`✅ Картинки готовы (${generatedUrls.length} шт). Начинаю верстать сайт...`);
             const urlList = generatedUrls.map((u, i) => `URL картинки ${i + 1}: ${u}`).join("\n");
             enrichedText = `${text}
 
@@ -1579,17 +1640,19 @@ ${urlList}
         }
       }
 
-      if (abortRef.current) return;
+      if (abortRef.current) { antThinkClear(); return; }
 
       // ── Шаг 2: генерируем HTML ────────────────────────────────────────────
       setCycleStatus("generating");
-      setCycleLabel("Создаю сайт...");
+      const actionLabel = currentHtml ? "Вношу правки в сайт" : `Создаю сайт ${analysis.businessType}`;
+      antThink(`⚙️ ${actionLabel}... (это займёт 20-40 секунд)`);
+      setCycleLabel(`${actionLabel}...`);
 
       // При редактировании (есть контекст) — передаём историю чата для памяти изменений
       const passHistory = !!(fullCodeContext || (ghSettings.token && ghSettings.repo && currentHtml));
 
       let rawResponse = await callAI(systemPrompt, enrichedText, (chars) => {
-        setCycleLabel(`Создаю сайт... ${chars} симв.`);
+        setCycleLabel(`${actionLabel}... ${chars} симв.`);
       }, passHistory);
       let cleanHtml = extractHtml(rawResponse);
 
@@ -1612,7 +1675,9 @@ User request: ${enrichedText}`;
         throw new Error(`Не удалось получить HTML от модели. Попробуйте переформулировать запрос.`);
       }
 
-      if (abortRef.current) return;
+      if (abortRef.current) { antThinkClear(); return; }
+
+      antThinkClear();
 
       const htmlWithBase = liveUrl ? injectBaseHref(cleanHtml, liveUrl) : cleanHtml;
       savePreviewHtml(injectLightTheme(htmlWithBase));
@@ -1620,12 +1685,14 @@ User request: ${enrichedText}`;
 
       const assistantId = ++msgCounter;
       const hasGitHub = !!(ghSettings.token && ghSettings.repo);
+      const sizeKb = Math.round(cleanHtml.length / 1024);
+      const doneText = currentHtml
+        ? `✅ Готово! Внёс правки в сайт (${sizeKb} КБ).${hasGitHub ? " Загружаю в GitHub..." : " Настройте GitHub для сохранения."}`
+        : `✅ Готово! Создал сайт для «${analysis.businessType}» (${sizeKb} КБ).${hasGitHub ? " Загружаю в GitHub..." : " Настройте GitHub для сохранения."}`;
       setMessages(prev => [...prev, {
         id: assistantId,
         role: "assistant",
-        text: currentHtml
-          ? hasGitHub ? "Готово! Правки внесены. Загружаю в GitHub..." : "Готово! Правки внесены. Настройте GitHub чтобы сохранить."
-          : hasGitHub ? "Готово! Сайт создан. Загружаю в GitHub..." : "Готово! Сайт создан. Настройте GitHub для сохранения.",
+        text: doneText,
         html: cleanHtml,
       }]);
 
