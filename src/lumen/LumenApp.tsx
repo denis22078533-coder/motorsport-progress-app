@@ -260,6 +260,24 @@ export default function LumenApp() {
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   });
+
+  // Память Муравья о пользователе
+  const [userMemory, setUserMemory] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("lumen_user_memory");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+  const saveMemory = (newFacts: Record<string, string>) => {
+    const merged = { ...userMemory, ...newFacts };
+    setUserMemory(merged);
+    localStorage.setItem("lumen_user_memory", JSON.stringify(merged));
+  };
+  const getMemoryContext = () => {
+    const entries = Object.entries(userMemory);
+    if (!entries.length) return "";
+    return "\n\n## Что я знаю о пользователе:\n" + entries.map(([k, v]) => `- ${k}: ${v}`).join("\n");
+  };
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [htmlHistory, setHtmlHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -847,6 +865,20 @@ export default function LumenApp() {
     }
   };
 
+  const searchWeb = async (query: string, maxResults = 5): Promise<{ title: string; snippet: string; url: string }[]> => {
+    try {
+      const r = await fetch(LUMEN_PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ __action__: "web_search", query, max_results: maxResults }),
+      });
+      const d = await r.json();
+      return d.results || [];
+    } catch {
+      return [];
+    }
+  };
+
   const detectProductRequest = (text: string): { article: string; name: string } | null => {
     const lc = text.toLowerCase();
     const isProductRequest = /карточк|товар|артикул|артикл|номенклатур|позиц|продукт|sku|код товар/i.test(lc);
@@ -943,34 +975,47 @@ export default function LumenApp() {
     const branch = ghSettings.branch || "main";
     try {
       const repoInfo = token && repo
-        ? `\n\nПодключён GitHub репозиторий: ${repo} (ветка: ${branch}).
-Доступны action-блоки для работы с файлами:
-- Список файлов в директории: \`{"action":"list","path":"src/lumen"}\`
-- Прочитать один файл: \`{"action":"read","path":"src/App.tsx"}\`
-- Прочитать несколько файлов сразу: \`{"action":"read_multiple","paths":["src/App.tsx","src/lumen/LumenApp.tsx"]}\`
-
-Отвечай только один action-блок за раз. После получения файлов — сразу выполни задачу.`
+        ? `\n\n## GitHub подключён: ${repo} (ветка: ${branch})
+Можешь читать файлы проекта через action-блоки:
+- Список файлов: \`{"action":"list","path":"src"}\`
+- Один файл: \`{"action":"read","path":"src/App.tsx"}\`
+- Несколько файлов: \`{"action":"read_multiple","paths":["src/App.tsx","src/lumen/LumenApp.tsx"]}\`
+Отвечай только один action-блок за раз.`
         : "";
-      const chatSystemPrompt = `Ты дружелюбный AI-ассистент Муравей. Отвечай кратко и по делу на русском языке. Помогай с вопросами о сайтах, бизнесе, маркетинге и всём остальном.${repoInfo}
 
-## ТВОИ СУПЕРСПОСОБНОСТИ — ТЫ УМЕЕШЬ РАБОТАТЬ С ФОТО:
+      const memoryCtx = getMemoryContext();
 
-### 1. Искать фото товара по названию/артикулу:
+      const chatSystemPrompt = `Ты Муравей — умный AI-ассистент. Ты помогаешь создавать сайты, разбираешься в бизнесе, маркетинге, SEO, продажах и технологиях. Отвечай на русском языке, кратко и по делу.${repoInfo}${memoryCtx}
+
+## ТВОИ ИНСТРУМЕНТЫ (используй action-блоки — НЕ отказывайся!):
+
+### 🔍 Поиск в интернете — когда нужны актуальные данные, цены, новости, факты:
+\`\`\`action
+{"action":"web_search","query":"ПОИСКОВЫЙ ЗАПРОС"}
+\`\`\`
+
+### 🖼 Найти фото товара по названию/артикулу:
 \`\`\`action
 {"action":"search_image","article":"АРТИКУЛ","name":"НАЗВАНИЕ ТОВАРА"}
 \`\`\`
 
-### 2. Генерировать фото через AI по описанию:
+### 🎨 Сгенерировать картинку через AI:
 \`\`\`action
-{"action":"generate_image","prompt":"ОПИСАНИЕ НА АНГЛИЙСКОМ, например: pharmacy medicine pills on white background, professional product photo"}
+{"action":"generate_image","prompt":"product photo, white background, professional lighting"}
 \`\`\`
 
-ПРАВИЛА:
-- Если пользователь просит найти/добавить фото конкретного товара — используй search_image
-- Если пользователь просит создать/сгенерировать картинку или нет конкретного товара — используй generate_image  
-- НИКОГДА не говори "я не могу видеть изображения" или "я не могу создать фото" — ты можешь!
-- Если пользователь прислал изображение — скажи что видишь его описание и предложи найти похожее или сгенерировать через action-блок
-- Всегда используй action-блок вместо отказа
+### 💾 Запомнить факт о пользователе:
+\`\`\`action
+{"action":"remember","key":"название бизнеса","value":"Аптека Здоровье"}
+\`\`\`
+
+## ПРАВИЛА ПОВЕДЕНИЯ:
+- НИКОГДА не говори "я не знаю", "я не могу", "у меня нет доступа" — ВСЕГДА используй инструменты
+- Если вопрос о текущих ценах, новостях, погоде, курсах — сразу делай web_search
+- Если просят фото товара — делай search_image (если не найдёт — автоматически сгенерирует)
+- Если узнал важный факт о пользователе (имя, бизнес, город) — запомни через remember
+- Отвечай только один action-блок за раз
+- После получения данных из поиска — дай развёрнутый полезный ответ
 
 ${PROJECT_STRUCTURE}`;
 
@@ -985,9 +1030,43 @@ ${PROJECT_STRUCTURE}`;
       // ── Шаг 2: обрабатываем action-блоки ─────────────────────────────────
       const actionMatch = response.match(/```action\s*([\s\S]*?)```/);
       if (actionMatch) {
-        let actionData: { action: string; path?: string; paths?: string[]; article?: string; name?: string; prompt?: string };
+        let actionData: { action: string; path?: string; paths?: string[]; article?: string; name?: string; prompt?: string; query?: string; key?: string; value?: string };
         try { actionData = JSON.parse(actionMatch[1].trim()); } catch { actionData = { action: "none" }; }
         const cleanResponse = response.replace(/```action[\s\S]*?```/, "").trim();
+
+        // action: web_search — поиск в интернете
+        if (actionData.action === "web_search") {
+          const query = actionData.query || text;
+          setCycleLabel(`Ищу в интернете: ${query}...`);
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `${cleanResponse}\nИщу в интернете...`.trim() }]);
+          const results = await searchWeb(query);
+          if (results.length > 0) {
+            const searchContext = results.map((r, i) => `${i + 1}. **${r.title}**\n${r.snippet}\n${r.url}`).join("\n\n");
+            setCycleLabel("Анализирую результаты...");
+            const response2 = await callAI(
+              chatSystemPrompt,
+              `Результаты поиска по запросу "${query}":\n\n${searchContext}\n\nНа основе этих данных ответь на вопрос пользователя: ${text}`,
+              (c) => setCycleLabel(`Анализирую... ${c} симв.`),
+              false
+            );
+            setCycleStatus("done"); setCycleLabel("");
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          } else {
+            setCycleStatus("done"); setCycleLabel("");
+            const response2 = await callAI(chatSystemPrompt, text, undefined, true);
+            setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: response2 }]);
+          }
+          return;
+        }
+
+        // action: remember — запомнить факт о пользователе
+        if (actionData.action === "remember" && actionData.key && actionData.value) {
+          saveMemory({ [actionData.key]: actionData.value });
+          setCycleStatus("done"); setCycleLabel("");
+          const msg = cleanResponse || `Запомнил: ${actionData.key} — ${actionData.value}`;
+          setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: msg }]);
+          return;
+        }
 
         // action: search_image — поиск фото товара
         if (actionData.action === "search_image") {
@@ -1134,7 +1213,7 @@ ${PROJECT_STRUCTURE}`;
       const errText = err instanceof Error ? err.message : "Неизвестная ошибка";
       setMessages(prev => [...prev, { id: ++msgCounter, role: "assistant", text: `Ошибка: ${errText}` }]);
     }
-  }, [settings, ghSettings, messages]);
+  }, [settings, ghSettings, messages, userMemory]);
 
   // ── Генерация SQL-миграции по запросу в чате ───────────────────────────────
   const [pendingSql, setPendingSql] = useState<{ sql: string; explanation: string } | null>(null);

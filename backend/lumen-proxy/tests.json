@@ -16,12 +16,12 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "Search image missing params",
+      "name": "Web search",
       "method": "POST",
       "path": "/",
-      "body": {"__action__": "search_image"},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "string"},
+      "body": {"__action__": "web_search", "query": "погода в Москве сегодня"},
+      "expectedStatus": 200,
+      "expectedBody": {"results": []},
       "bodyMatcher": "partial"
     }
   ]
