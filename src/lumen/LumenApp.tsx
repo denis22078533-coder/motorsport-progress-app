@@ -240,7 +240,12 @@ export default function LumenApp() {
 
   const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
   const [cycleLabel, setCycleLabel] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem("lumen_chat_history");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [htmlHistory, setHtmlHistory] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -280,6 +285,13 @@ export default function LumenApp() {
         : "Self-Edit Mode выключен. Работаю в обычном режиме.",
     }]);
   };
+
+  // Автосохранение истории чата (макс. 100 последних сообщений)
+  useEffect(() => {
+    try {
+      localStorage.setItem("lumen_chat_history", JSON.stringify(messages.slice(-100)));
+    } catch { /* ignore */ }
+  }, [messages]);
 
   // Sync Engine — скачать исходники платформы
   const [syncingEngine, setSyncingEngine] = useState(false);
@@ -1442,6 +1454,7 @@ ${urlList}
 
   const handleNewProject = () => {
     setMessages([]);
+    try { localStorage.removeItem("lumen_chat_history"); } catch { /* ignore */ }
     savePreviewHtml(null);
     setHtmlHistory([]);
     setCycleStatus("idle");
