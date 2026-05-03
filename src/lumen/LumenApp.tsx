@@ -239,7 +239,8 @@ export default function LumenApp() {
     return user && repo ? `https://${user}.github.io/${repo}/` : "";
   })();
 
-  const [cycleStatus, setCycleStatus] = useState<CycleStatus>("idle");
+  const [cycleStatus, setCycleStatusRaw] = useState<CycleStatus>("idle");
+  const setCycleStatus = (s: CycleStatus) => { cycleStatusRef.current = s; setCycleStatusRaw(s); };
   const [cycleLabel, setCycleLabel] = useState("");
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -316,6 +317,7 @@ export default function LumenApp() {
 
   // Сохраняем HTML в localStorage при каждом изменении
   const savePreviewHtml = (html: string | null) => {
+    previewHtmlRef.current = html;
     setPreviewHtml(prev => {
       if (prev) setHtmlHistory(h => [...h.slice(-9), prev]); // храним до 10 версий
       return html;
@@ -346,6 +348,9 @@ export default function LumenApp() {
   const abortRef = useRef(false);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const [convertingZip, setConvertingZip] = useState(false);
+  const autoFixingRef = useRef(false);
+  const previewHtmlRef = useRef<string | null>(null);
+  const cycleStatusRef = useRef<CycleStatus>("idle");
 
   // Загружаем JSZip через CDN один раз
   useEffect(() => {
@@ -554,13 +559,18 @@ export default function LumenApp() {
     const forceCss = `<style data-lumen-fix>
       html,body{background:#ffffff!important;color:#111111!important;}
     </style>`;
+    // Перехватчик JS-ошибок — отправляет их в родительское окно через postMessage
+    const errorScript = `<script data-lumen-err>
+(function(){var _errs=[];var _t=null;function _flush(){if(_errs.length&&parent!==window){parent.postMessage({type:'lumen-js-errors',errors:_errs.slice()},'*');_errs=[];}}window.onerror=function(msg,src,line,col){_errs.push(String(msg)+(src?' ('+src.split('/').pop()+':'+line+')':''));clearTimeout(_t);_t=setTimeout(_flush,800);return false;};window.addEventListener('unhandledrejection',function(e){_errs.push('Promise: '+String(e.reason));clearTimeout(_t);_t=setTimeout(_flush,800);});})();
+</script>`;
+    const inject = forceCss + errorScript;
     if (/<\/head>/i.test(html)) {
-      return html.replace(/<\/head>/i, `${forceCss}</head>`);
+      return html.replace(/<\/head>/i, `${inject}</head>`);
     }
     if (/<body/i.test(html)) {
-      return html.replace(/<body([^>]*)>/i, `<head>${forceCss}</head><body$1>`);
+      return html.replace(/<body([^>]*)>/i, `<head>${inject}</head><body$1>`);
     }
-    return forceCss + html;
+    return inject + html;
   };
 
   // Инжектирует <base href> в HTML чтобы относительные пути assets/ работали через живой домен
@@ -700,6 +710,67 @@ export default function LumenApp() {
       return content;
     }
   };
+
+  // ── Авто-исправление JS-ошибок из iframe ─────────────────────────────────
+  useEffect(() => {
+    const handler = async (event: MessageEvent) => {
+      if (
+        !event.data ||
+        event.data.type !== "lumen-js-errors" ||
+        !Array.isArray(event.data.errors) ||
+        event.data.errors.length === 0
+      ) return;
+
+      if (autoFixingRef.current || cycleStatusRef.current === "generating") return;
+
+      const errors: string[] = [...new Set(event.data.errors as string[])].slice(0, 5);
+      const htmlSnapshot = previewHtmlRef.current;
+      if (!htmlSnapshot) return;
+
+      autoFixingRef.current = true;
+      setCycleStatus("generating");
+      setCycleLabel("Нашёл ошибки, исправляю...");
+
+      const errList = errors.map((e, i) => `${i + 1}. ${e}`).join("\n");
+      setMessages(prev => [...prev, {
+        id: ++msgCounter,
+        role: "assistant",
+        text: `Обнаружил ошибки в сайте, исправляю автоматически...\n\`\`\`\n${errList}\n\`\`\``,
+      }]);
+
+      try {
+        const fixedRaw = await callAI(
+          `You are an HTML/JS bug fixer. Output ONLY the complete corrected HTML document starting with <!DOCTYPE html>. No explanations.`,
+          `Fix these JavaScript runtime errors in the HTML page:\n${errList}\n\nFix ONLY these errors, keep everything else exactly as is.\n\n--- CURRENT HTML ---\n${htmlSnapshot.slice(0, 60000)}`,
+          (chars) => { setCycleLabel(`Исправляю... ${chars} симв.`); },
+          false
+        );
+        const fixedHtml = extractHtml(fixedRaw);
+        if (/<[a-z][\s\S]*>/i.test(fixedHtml)) {
+          const htmlWithBase = liveUrl ? injectBaseHref(fixedHtml, liveUrl) : fixedHtml;
+          savePreviewHtml(injectLightTheme(htmlWithBase));
+          setMessages(prev => [...prev, {
+            id: ++msgCounter,
+            role: "assistant",
+            text: "Ошибки исправлены, сайт обновлён.",
+            html: fixedHtml,
+          }]);
+          setCycleStatus("done");
+        } else {
+          setCycleStatus("idle");
+        }
+      } catch {
+        setCycleStatus("idle");
+      } finally {
+        setCycleLabel("");
+        autoFixingRef.current = false;
+      }
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveUrl]);
 
   const IMAGE_GENERATE_URL = "https://functions.poehali.dev/0f178db7-a08a-4911-8f10-5f45a0d585a3";
   const LUMEN_PROXY_URL = "https://functions.poehali.dev/60463e71-1a34-44dc-bde3-90a47fc07cba";
