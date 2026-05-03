@@ -131,14 +131,20 @@ const EDIT_SYSTEM_PROMPT_FULL = (currentHtml: string) =>
   `${SENIOR_DEV_ROLE}
 ## Task: Edit existing website code
 Output ONLY the complete modified HTML document. No explanations, no markdown.
-Rules:
-- Make EXACTLY the requested changes, nothing more
-- Preserve all existing styles, structure, content that was NOT mentioned
-- Keep the same framework/library versions already in the code
 
---- CURRENT SITE CODE ---
+## КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА — НАРУШЕНИЕ НЕДОПУСТИМО:
+- ❌ ЗАПРЕЩЕНО пересоздавать сайт заново — это РЕДАКТИРОВАНИЕ, не создание
+- ❌ ЗАПРЕЩЕНО менять дизайн, цвета, шрифты, структуру если не просили
+- ❌ ЗАПРЕЩЕНО добавлять секции которые не просили (FAQ, отзывы, footer и т.д.)
+- ❌ ЗАПРЕЩЕНО менять существующий контент который не упомянут в запросе
+- ✅ Сделай ТОЛЬКО то что попросили — одно конкретное изменение
+- ✅ Все остальные части сайта оставь ТОЧНО как есть
+- ✅ Если просят добавить товар — добавь только карточку товара в нужное место
+- ✅ Если найдено фото товара — используй ИМЕННО этот URL, не придумывай другое
+
+--- ТЕКУЩИЙ КОД САЙТА (редактируй только нужные части) ---
 ${currentHtml}
---- END OF CODE ---`;
+--- КОНЕЦ КОДА ---`;
 
 const ZIP_CONVERT_SYSTEM_PROMPT = `${SENIOR_DEV_ROLE}
 ## Task: Convert React/Vite project to single HTML file
@@ -1238,20 +1244,22 @@ ${PROJECT_STRUCTURE}`;
         if (productImgUrl) {
           enrichedText = `${text}
 
-ВАЖНО: Я нашёл фото для товара. ОБЯЗАТЕЛЬНО используй его в карточке:
-Фото товара: ${productImgUrl}
+НАЙДЕНО РЕАЛЬНОЕ ФОТО ТОВАРА из интернета — используй именно этот URL:
+Фото: ${productImgUrl}
 Артикул: ${productInfo.article || "не указан"}
 Название: ${productInfo.name || "не указано"}
 
-Требования:
-- Вставь это фото в карточку товара через <img src="${productImgUrl}" ...>
-- Карточка должна быть красивой: фото, название, артикул, цена (если указана), кнопка "В корзину" или "Заказать"
-- style="object-fit: cover" для фото`;
+СТРОГИЕ ПРАВИЛА:
+- Используй ТОЛЬКО этот URL фото: ${productImgUrl}
+- НЕ генерируй и НЕ придумывай другие картинки
+- Добавь карточку товара: фото (object-fit: cover), название, артикул, кнопка "В корзину"
+- НЕ меняй остальные части сайта — только добавь карточку товара`;
         }
       }
 
       // ── Шаг 1.6: генерируем картинки если нужны ──────────────────────────
-      const wantsImages = !productInfo && /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|товар|продукт|блюд|еда|ресторан|кафе|кофейн|магазин|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
+      // Генерируем AI-картинки только для новых сайтов (нет currentHtml) и не для товаров (у них уже есть поиск)
+      const wantsImages = !productInfo && !currentHtml && /картинк|фото|изображени|баннер|галере|природ|интерьер|пейзаж|вид|блюд|еда|ресторан|кафе|кофейн|спортзал|фитнес|отель|image|photo|banner|gallery|nature|landscape/i.test(text);
       if (wantsImages) {
         setCycleStatus("generating");
         setCycleLabel("Генерирую картинки...");
