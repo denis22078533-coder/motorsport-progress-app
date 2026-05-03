@@ -574,13 +574,17 @@ export default function LumenApp() {
       if (!srcMatch) {
         // Нет src вообще — заменяем
       } else {
-        const src = srcMatch[1];
-        // Оставляем реальные CDN URL (поехали, github и т.д.) и data:
+        const src = srcMatch[1].trim();
+        // Оставляем data: и blob: — они рабочие
         if (src.startsWith("data:") || src.startsWith("blob:")) return match;
-        if (/cdn\.poehali\.dev|githubusercontent\.com|github\.com|cloudinary\.com/i.test(src)) return match;
-        // Если не заблокированный внешний — тоже оставляем
-        if (!BLOCKED.test(src) && !src.startsWith("http")) return match;
-        if (!BLOCKED.test(src)) return match;
+        // Оставляем доверенные CDN
+        if (/cdn\.poehali\.dev|githubusercontent\.com|cloudinary\.com/i.test(src)) return match;
+        // Заменяем: заблокированные плейсхолдеры
+        if (BLOCKED.test(src)) { /* fall through — заменить */ }
+        // Заменяем: относительные пути (photo.jpg, /images/x.png, ./img/x) — они всегда битые в превью
+        else if (!src.startsWith("http")) { /* fall through — заменить */ }
+        // Оставляем все остальные внешние http(s) URL
+        else return match;
       }
       // Извлекаем alt для эмодзи-подсказки
       const altMatch = attrs.match(/alt=["']([^"']{1,20})["']/i);
@@ -599,6 +603,7 @@ export default function LumenApp() {
     html = fixBrokenImages(html); // убираем битые изображения до всего остального
     const forceCss = `<style data-lumen-fix>
       html,body{background:#ffffff!important;color:#111111!important;}
+      img:not([src]),img[src=""],img[src^="/"],img[src^="./"],img[src^="../"]{display:none!important;}
     </style>`;
     // Перехватчик JS-ошибок — отправляет их в родительское окно через postMessage
     const errorScript = `<script data-lumen-err>
