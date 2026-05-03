@@ -709,15 +709,25 @@ export default function LumenApp() {
     const lc = text.toLowerCase();
     const isProductRequest = /карточк|товар|артикул|артикл|номенклатур|позиц|продукт|sku|код товар/i.test(lc);
     if (!isProductRequest) return null;
-    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9\-_.]+)/i)
-      || text.match(/sku[:\s]*([A-Za-z0-9\-_.]+)/i)
-      || text.match(/код[:\s]*([A-Za-z0-9\-_.]+)/i)
-      || text.match(/[#№]\s*([A-Za-z0-9\-_.]+)/);
+
+    // Артикул: поддерживаем цифры, буквы, дефисы, точки, слэши (73/6/8/8)
+    const articleMatch = text.match(/артикул[а-я\s]*[:\s#№]?\s*([A-Za-zА-Яа-я0-9\-_./]+)/i)
+      || text.match(/sku[:\s]*([A-Za-z0-9\-_./]+)/i)
+      || text.match(/код[:\s]*([A-Za-z0-9\-_./]+)/i)
+      || text.match(/[#№]\s*([A-Za-z0-9\-_./]+)/);
+
+    // Название: берём текст до артикула или до конца строки
     const nameMatch = text.match(/назван[иеие]+[:\s]+([^,\n.]+)/i)
-      || text.match(/товар[:\s]+([^,\n.]+)/i)
-      || text.match(/наименован[иеие]+[:\s]+([^,\n.]+)/i);
+      || text.match(/наименован[иеие]+[:\s]+([^,\n.]+)/i)
+      || text.match(/товар[:\s"«]+([А-Яа-яA-Za-z][^,\n"»0-9]{2,40})/i);
+
     const article = articleMatch ? articleMatch[1].trim() : "";
-    const name = nameMatch ? nameMatch[1].trim() : "";
+    // Очищаем название от артикула если он туда попал
+    let name = nameMatch ? nameMatch[1].trim() : "";
+    if (article && name.includes(article)) {
+      name = name.replace(article, "").trim().replace(/[-\s]+$/, "").trim();
+    }
+
     if (!article && !name) return null;
     return { article, name };
   };
