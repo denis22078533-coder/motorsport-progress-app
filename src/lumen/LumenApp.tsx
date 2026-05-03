@@ -554,8 +554,49 @@ export default function LumenApp() {
     return tagMatch ? tagMatch[1].trim() : raw.trim();
   };
 
+  // Замена битых <img> на красивые CSS-плейсхолдеры с эмодзи
+  const fixBrokenImages = (html: string): string => {
+    const BLOCKED = /unsplash\.com|picsum\.photos|via\.placeholder\.com|placehold\.co|loremflickr\.com|source\.unsplash|images\.unsplash|placeholder\.com|dummyimage\.com|placekitten\.com|fakeimg\.pl/i;
+    // Набор градиентов и эмодзи для разных тематик
+    const PLACEHOLDERS = [
+      { bg: "linear-gradient(135deg,#667eea,#764ba2)", emoji: "🖼" },
+      { bg: "linear-gradient(135deg,#f093fb,#f5576c)", emoji: "📷" },
+      { bg: "linear-gradient(135deg,#4facfe,#00f2fe)", emoji: "🌅" },
+      { bg: "linear-gradient(135deg,#43e97b,#38f9d7)", emoji: "🌿" },
+      { bg: "linear-gradient(135deg,#fa709a,#fee140)", emoji: "✨" },
+      { bg: "linear-gradient(135deg,#a18cd1,#fbc2eb)", emoji: "💊" },
+      { bg: "linear-gradient(135deg,#ffecd2,#fcb69f)", emoji: "🛍" },
+      { bg: "linear-gradient(135deg,#2c3e50,#4ca1af)", emoji: "🏢" },
+    ];
+    let idx = 0;
+    return html.replace(/<img([^>]*?)>/gi, (match, attrs) => {
+      const srcMatch = attrs.match(/src=["']([^"']+)["']/i);
+      if (!srcMatch) {
+        // Нет src вообще — заменяем
+      } else {
+        const src = srcMatch[1];
+        // Оставляем реальные CDN URL (поехали, github и т.д.) и data:
+        if (src.startsWith("data:") || src.startsWith("blob:")) return match;
+        if (/cdn\.poehali\.dev|githubusercontent\.com|github\.com|cloudinary\.com/i.test(src)) return match;
+        // Если не заблокированный внешний — тоже оставляем
+        if (!BLOCKED.test(src) && !src.startsWith("http")) return match;
+        if (!BLOCKED.test(src)) return match;
+      }
+      // Извлекаем alt для эмодзи-подсказки
+      const altMatch = attrs.match(/alt=["']([^"']{1,20})["']/i);
+      const altText = altMatch ? altMatch[1] : "";
+      const classMatch = attrs.match(/class=["']([^"']+)["']/i);
+      const styleMatch = attrs.match(/style=["']([^"']+)["']/i);
+      const p = PLACEHOLDERS[idx++ % PLACEHOLDERS.length];
+      const cls = classMatch ? ` class="${classMatch[1]}"` : "";
+      const extraStyle = styleMatch ? styleMatch[1] : "";
+      return `<div${cls} style="background:${p.bg};display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:160px;border-radius:inherit;${extraStyle}"><span style="font-size:2.5rem">${p.emoji}</span>${altText ? `<span style="color:rgba(255,255,255,0.7);font-size:0.75rem;margin-top:6px;padding:0 8px;text-align:center">${altText}</span>` : ""}</div>`;
+    });
+  };
+
   // Инжектирует принудительный светлый фон если в HTML нет явного светлого background
   const injectLightTheme = (html: string): string => {
+    html = fixBrokenImages(html); // убираем битые изображения до всего остального
     const forceCss = `<style data-lumen-fix>
       html,body{background:#ffffff!important;color:#111111!important;}
     </style>`;
